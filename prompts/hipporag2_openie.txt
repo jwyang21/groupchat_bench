@@ -1,0 +1,88 @@
+You are an intelligent information extractor.
+You should extract information from input passage.
+The extracted information should be in a structured form: 
+{
+  "named_entities": [entity1, entity2, ...],
+  "triples": [
+    [head1, relation1, tail1],
+    [head2, relation2, tail2,], ...
+  ]
+}
+Relation describes how tail entity is related to head entity.
+Below are the requirements you should follow during the task.
+========================================
+[REQUIREMENTS]  
+- Output format: Return a dictionary including two keys: "named entities" and "triples". 
+  - Key 1: "named entities". Its value should be a list, and its each element should be a named entity you extracted from the given passage. 
+  - Key 2: "triples". Its value should be a list, and its each elemnt should be a triple. 
+    - Each triple must be a list including three elements, head, relation, and tail (These three elements should be placed in this order). 
+    - Both head and tail of each triple should be included in the list of named entities you output.
+- Avoid using apostrophes (') in any entity (i.e., each named entity, head, and tail): The head and tail should represent distinct entities, not include the relationship itself. 
+  - For example, output {"Andrew", "son", "Peter"} instead of {"Andrew's little boy", "is", "Peter"}.
+- No pronouns: Replace all pronouns with their correct referents. 
+- No redundant information: Avoid extracting redundant triples such as {'Joanne', 'is', 'Joanne'}. This triple is redundant because the name 'Joanne' itself indicates that the person's name is Joanne, so there is no need to re-specify that the person's name is Joanne by this information as a triple. 
+- Atomic constraint: Each of head, relation, and tail must be a single atomic entity (e.g., a single name, concept, or noun). No conjunctions (e.g., "Rachel and Monica") or multi-word relations (e.g., "is friend from high school") are allowed. Decompose such expressions into multiple simpler triples.
+- Multi-triple decomposition: Express complex or descriptive facts using multiple atomic triples when needed. For example:
+  - Incorrect: ["Carlos Rodriguez", "is talented player and runs", "summer soccer camp"]
+  - Correct:
+    [["Carlos Rodriguez", "is", "talented player"],
+    ["Carlos Rodriguez", "runs", "summer soccer camp"]]
+========================================
+[EXAMPLES] 
+1. Correct output
+(Example 1)
+- Dialogue: 
+Emily: Hey Mark, I just got back from visiting my grandmother Rose in Florida last weekend.
+Mark: That sounds nice! How long were you there?
+Emily: About a week. Her house is right near the beach in Tampa.
+Mark: I've never been to Tampa. Is it nice there?
+Emily: It's beautiful! The weather was perfect. She has this gorgeous garden where we had breakfast every morning.
+
+- Output: 
+Here is the extracted structured information, strictly following the requirements. 
+{
+  "named_entities": ["Emily", "Rose", "Florida", "garden"],
+  "triples": [
+    ["Emily", "visited", "Rose"],
+    ["Emily", "grandmother", "Rose"]
+    ["Rose", "has", "garden"], 
+    ["Rose", "residence", "Florida"]
+  ]
+}
+
+--------------------
+2. Incorrect output   
+(Example 1: Named entities are extracted correctly, but the triples are wrong)
+- Dialogue:
+Miguel: Did you see the championship game last night?
+Sophia: Yes! It was so exciting when the Tigers won in the final minutes.
+Miguel: I couldn't believe that last-minute goal by Carlos Rodriguez. He's such a talented player.
+Sophia: Absolutely! He's been with the team for what, five years now?
+
+- Incorrect output: 
+{
+  "named_entities": ["Carlos Rodriguez", "summer soccer camp"],
+  "triples": [
+    ["Carlos Rodriguez", "is talented player and runs", "summer soccer camp"],
+    ["Carlos Rodriguez", "is", "Carlos Rodriguez"]
+  ]
+}
+  
+- Correction: 
+The incorrect output combines two separate relations into one. The corrected triples would be:
+{
+  "named_entities": ["Carlos Rodriguez", "summer soccer camp"],
+  "triples": [
+    ["Carlos Rodriguez", "is", "talented player"],
+    ["Carlos Rodriguez", "runs", "Future Champions"]
+  ]
+}
+
+========================================
+[BEGIN TASK]  
+Now, extract structured information from the following passages.
+
+Passage:  
+{passage}
+
+Output:

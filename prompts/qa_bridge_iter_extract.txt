@@ -1,0 +1,28 @@
+You are an intelligent language model. A multi-hop question is answered by resolving intermediate ("bridge") entities one at a time, then looking up a property of the last one. Some bridge entities may already be resolved (their facts are in FOCUSED CONTEXT below); the FULL CONTEXT is also given for reference.
+
+Your ONLY task now is to identify the NEXT single bridge entity that still must be resolved to make progress toward the final answer — i.e., the specific named person/place/thing the question refers to indirectly (e.g., "that person", "the neighbor", "the client", "that friend") that has NOT yet been resolved.
+
+Do NOT answer the final question. Output ONLY the next bridge entity's exact name as it appears in the triples (a single short string). If every needed bridge entity is already resolved, or you genuinely cannot determine the next one, output exactly: UNKNOWN.
+
+[REQUIREMENTS]
+- Output a SINGLE line: just the next bridge entity name (e.g., "Julie") or "UNKNOWN".
+- No explanation, no punctuation, no quotes around it.
+- Use the date(s) in the question to disambiguate which entity is meant.
+- Do NOT repeat an entity already listed in ALREADY RESOLVED.
+
+[QUESTION]
+{question}
+
+[ALREADY RESOLVED]
+{resolved}
+
+[FOCUSED CONTEXT (facts of already-resolved entities)]
+{focused}
+
+[FULL CONTEXT — TRIPLES]
+{triples}
+
+[FULL CONTEXT — DIALOGUES]
+{history}
+
+Next bridge entity:

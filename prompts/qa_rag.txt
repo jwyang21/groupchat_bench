@@ -1,0 +1,61 @@
+You are an intelligent language model. Your task is to answer the question based on the provided history.
+Each history is formatted as a dialogue.
+
+You will be given a question with five answer choices: (A), (B), (C), (D), and (E). Among these options, only one is correct.
+Additionally, you will be provided with history.
+
+Below are the requirements you must follow when answering questions.
+
+[REQUIREMENTS]
+- Your output should be a SINGLE option. In other words, your final output must be an element of [(A), (B), (C), (D), (E)]. 
+- For example, if you think '(A) Helen' is the correct answer, you should ONLY output '(A)', neither '(A) Helen' nor 'Helen'.
+- Solve questions based on the provided history only. Actively use the provided history to solve the question.
+- You are not allowed to output intermediate processes of how you solved the question.
+- Ensure that the logic leading to your final answer is correct.
+  - 'Logic' refers to entire thought process for arriving at your final answer.
+- Before outputting your final answer, check once again whether your answer is correct. If it is incorrect, revise it accordingly.
+- Avoid outputting '(E)' too readily, as this option indicates you don't know the answer. If there's any information available to solve the question, make full use of it.
+
+Below is an example of solving each question based on the provided history.
+
+[EXAMPLE]
+- Question:  
+Sophia: Do you remember which company Daniel joined on August 20, 2017?  
+	(A) Amazon  
+	(B) Google  
+	(C) Microsoft  
+	(D) Apple  
+	(E) I don't know. (None of the above)  
+
+- History:  
+[Date: July 10, 2017, Session 1]
+Walter: So, any news on the job front, Daniel?
+Daniel: Great news! I just accepted a job offer from Amazon.
+Walter: That's amazing! Congratulations!
+
+[Date: August 20, 2017, Session 2]
+Wendy: Hey Daniel, how are things?
+Daniel: Really good! I finally started working at the company that offered me a position in July.
+Wendy: Glad to hear it! How's it going so far?
+
+[Date: March 5, 2022, Session 3]
+Kyle: What's new with you, Emma?
+Emma: I have some exciting news. I started working at Microsoft last week!
+Kyle: Wow, Microsoft! That's a huge accomplishment.
+
+The first history (dialogue) states that Daniel received and accepted a job offer from Amazon. 
+The second history indicates that Daniel joined the company that offered him a position in July, which, based on the first history, is Amazon. 
+The third history mentions a name of a company, Microsoft, but it is unrelated to Daniel. 
+Therefore, the correct answer is (A), and your final output should be '(A)'.
+========================================
+Please note that you should output only a SINGLE option from [(A), (B), (C), (D), (E)], without any intermediate steps.
+
+Now, let's solve the question by referring to the history below:
+
+- Question: 
+{question}
+
+- History: 
+{history}
+
+- Answer:

@@ -1,0 +1,52 @@
+# Example config: Mem0 baseline (arXiv 2504.19413). Friends, newname, trial 0, Qwen.
+# Two-phase commit then QA run via src/run/main.simulate.py (see A-MEM example header).
+
+data:
+  dataset_root: ./data/v1_3_1/friends
+  data_type: newname
+  trial: 0
+  ie_type: openie
+  normalization: raw
+  per_llm_precomputed: false
+llms:
+- name: qwen3.5-35b-a3b-on
+  provider: vllm
+  model_name: qwen3.5-35b-a3b-on
+  host: <VLLM_HOST>        # e.g. localhost or your vLLM server IP
+  port: <VLLM_PORT>        # e.g. 8000
+  extra_base_urls: []
+  api_key: EMPTY
+  temperature: 0.6
+  top_p: 0.95
+  max_tokens: 8192
+  system_prompt: You are a helpful assistant.
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+    thinking_token_budget: 6000
+embedder:
+  backend: openai
+  model: text-embedding-3-small
+  cache: true
+memory:
+  name: mem0
+  top_s: 10
+  top_k: 600
+  context_size: 8000
+  question_format: multi_structured
+  prompt_fact_extraction: mem0_fact_triple_extraction.txt
+  prompt_update_decision: mem0_update_decision.txt
+  prompt_qa: qa_mem0.txt
+  snapshot_dir: ./result/baseline_snapshots/v1_3_1_newname_t0
+  extract_cache: true
+  session_checkpoint: true
+  turns_per_batch: 5
+run:
+  seed: 42
+  start_session_idx: 0
+  end_session_idx: 9999
+  session_filter: all
+  commit_only: true
+  log_prompts: true
+  answer_max_workers: 16
+  commit_extract_workers: 6

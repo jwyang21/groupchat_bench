@@ -1,0 +1,61 @@
+# Example config: Oracle upper bound (perfect retrieval + routing). BigBang, newname, trial 0, Qwen.
+# Single-phase QA run via src/run/main.simulate.py.
+
+data:
+  dataset_root: ./data/v1_3_1/bigbang
+  data_type: newname
+  trial: 0
+  ie_type: openie
+  normalization: raw
+  per_llm_precomputed: false
+llms:
+- name: qwen3.5-35b-a3b-on
+  provider: vllm
+  model_name: qwen3.5-35b-a3b-on
+  host: <VLLM_HOST>        # e.g. localhost or your vLLM server IP
+  port: <VLLM_PORT>        # e.g. 8000
+  api_key: EMPTY
+  temperature: 1.0
+  top_p: 0.95
+  max_tokens: 16384
+  extra_body:
+    top_k: 20
+    min_p: 0.0
+    presence_penalty: 1.5
+    repetition_penalty: 1.0
+    chat_template_kwargs:
+      enable_thinking: true
+    thinking_token_budget: 10000
+  extra_base_urls: []
+embedder:
+  backend: openai
+  model: text-embedding-3-small
+  cache: true
+memory:
+  name: oracle
+  oracle_dialogue_only: true
+  question_format: multi_structured
+  context_size: 0
+  fallback: true
+  num_retrieved_tkg: 350
+  num_retrieved_rag: 40
+  quad_format: quad
+  normalization: raw
+  delimiter: ========================================
+  oracle_dialogue_rank: alternating
+  prompt_rag: qa_rag.txt
+  prompt_quad: qa_quad.txt
+  prompt_no_history: qa_no-history-eager.multi-structured.txt
+run:
+  seed: 42
+  start_session_idx: 0
+  end_session_idx: 9999
+  session_filter: all
+  commit_only: false
+  log_prompts: true
+  log_prompts_dir: log/v1_3_1_oracle/prompts/bigbang.newname.t0.qwen3.5-35b-a3b-on
+  answer_max_workers: 16
+  qa_eval_mode: mcq
+  result_save_every: 300
+qa:
+  answer_budget: 10000

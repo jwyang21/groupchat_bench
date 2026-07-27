@@ -1,0 +1,84 @@
+You are an intelligent information extractor.
+You should extract information from input conversation and the its date (i.e., when the input converastion occurred).
+Each piece of extracted information should be represented as single natural language sentence.
+  - You first have to extract triples ([head, relation, tail]) from the conversation and concatenate them into a sentence (i.e., f'{head} {relation} {tail}').
+  - Relation describes how tail entity is related to head entity.
+Below are the requirements you should follow during the task.
+========================================
+[REQUIREMENTS]  
+- Output format: Return a dictionary with a key "fact". 
+  - It should have a list of natural language sentences as its value.
+     - Each sentence should represent a self-contained fact.
+    - Each sentence should be a concatenation of each triple extracted from input conversation: f'{input} {relation} {tail}'
+    - If you think the sentence needs a specific temporal information to be self-contained, you should add the temporal information at the end of the sentence.
+      - In this case, the temporal information added to the sentence should be absolute (i.e., September 24, 1924, December 1900, 2014, etc.), and relative form is not allowed (e.g., yesterday, last year, etc.)
+      - If you cannot specify the absolute form out of the relative form, don't include that uncertain temporal information in the fact sentence.
+  - [Example]
+    - Input:
+      [Conversation date]
+      April 20, 1995
+        
+      [Conversation]
+      Alex: Did you see Victor's new commercial? I always forget he's actually a professional actor.
+      George: Yeah, it's pretty cool! I was actually talking to Tonya about it yesterday.
+      Alex: Man, you've had a huge crush on Tonya since last year—when are you finally going to ask her out?
+      George: I really want to, but I'm still trying to find the perfect moment to confess my feelings.
+      Alex: You'd better hurry up before Victor uses his acting charm to steal her away!
+    - Output: {"facts" : ["Victor is actor", "George had a crush on Tonya since 1994"]}
+  - In the example above, it is mentioned that Victor is a professional actor, so this information is first extracted as a triple ["Victor, "is", "actor"], and this triple is concatenated into a sentence "Victor is actor". Because there is no temporal infoamtion related to this fact, no temporal expression is included in this sentence.
+  - In the example above, it is stated that George has had a crush on Tonya since last year. This information can be represented as a triple ["George", "had a crush on", "Tonya"]. Also, since it is informed that this conversation took place on April 20, 1995, the temporal information in the relative form "last year" should be converted into an absolute form "1994". Therefore, the final form of the fact (i.e., sentence) is 'George likes Tonya since 1994'.
+- Avoid using apostrophes (') in heads and tails: The head and tail should represent distinct entities, not include the relationship itself. 
+For example, Use ["Andrew", "son", "Peter"] instead of ["Andrew's little boy", "is", "Peter"].
+- No pronouns: Replace all pronouns with their correct referents. 
+- No redundant information: Avoid extracting redundant triples such as ["Joanne", "is", "Joanne"]. This triple is redundant because the name 'Joanne' itself indicates that the person's name is Joanne, so there is no need to re-specify that the person's name is Joanne by this information as a triple. 
+- Atomic constraint: Each of head, relation, and tail must be a single atomic entity (e.g., a single name, concept, or noun). No conjunctions (e.g., "Michael and Anne") or multi-word relations (e.g., "is friend from high school") are allowed. Decompose such expressions into multiple simpler triples.
+- Multi-triple decomposition: Decompose a complex or descriptive fact into multiple atomic facts (i.e., triples) when needed. For example:
+  - Incorrect: ["Carlos Rodriguez", "is talented player and runs", "summer soccer camp"]
+  - Correct:
+    ["Carlos Rodriguez", "is", "talented player"] 
+    ["Carlos Rodriguez", "runs", "summer soccer camp"]
+========================================
+[EXAMPLES] 
+1. Correct output
+(Example 1)
+[Conversation date]
+February 10, 2015
+  
+[Conversation]
+Emily: Hey Mark, I just got back from visiting my grandmother Rose in Florida last weekend.
+Mark: That sounds nice! How long were you there?
+Emily: About a week. Her house is right near the beach in Tampa.
+Mark: I've never been to Tampa. Is it nice there?
+Emily: It's beautiful! The weather was perfect. She has this gorgeous garden where we had breakfast every morning.
+
+- Output: 
+{"facts" : ["Emily visited Rose on February 2015", "Emily grandmother Rose", "Rose lives in Florida on February 2015", "Rose house near beach on February 2015", "Rose has garden on February 2015"]}
+
+--------------------
+2. Incorrect output   
+(Example 1)
+[Conversation date]
+June 2, 2021
+  
+[Conversation]
+Miguel: Did you see the championship game last night?
+Sophia: Yes! It was so exciting when the Tigers won in the final minutes.
+Miguel: I couldn't believe that last-minute goal by Carlos Rodriguez. He's such a talented player.
+Sophia: Absolutely! He's been with the team for what, five years now?
+
+- Incorrect output: 
+{"facts" : ["Carlos Rodriguez is talented player and runs summer soccer camp", "Carlos Rodriguez is Carlos Rodriguez"]}
+  
+- Correction: 
+The first sentence in the incorrect output combines two separate relations into one. The corrected facts would be:
+{"facts" : ["Carlos Rodriguez is talented player", "Carlos Rodriguez runs summer soccer camp"]}
+
+========================================
+[BEGIN TASK]  
+Now, extract facts from the following conversations.
+
+[Conversation date]
+{date}
+
+[Conversation]
+{dialogue}

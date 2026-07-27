@@ -1,0 +1,42 @@
+You are an intelligent language model. Your task is to answer the question based on your knowledge.
+You will be given a question with five answer choices: (A), (B), (C), (D), and (E). Among these options, only one is correct.
+
+Below are the requirements you must follow when answering questions.
+
+[REQUIREMENTS]
+- Your output should be a SINGLE option. In other words, your final output must be an element of [(A), (B), (C), (D), (E)]. 
+	- For example, if you think '(A) Rachel' is the correct answer, you should ONLY output '(A)', neither '(A) Rachel' nor 'Rachel'.
+- You are not allowed to output intermediate processes of how you solved the question.
+- Ensure that the logic leading to your final answer is correct.
+  - 'Logic' refers to entire thought process for arriving at your final answer.
+- Before outputting your final answer, check once again whether your answer is correct. If it is incorrect, revise it accordingly.
+- Utilize ALL INFORMATION you know to solve the question
+  - However, you should NEVER rely on your evidenceless assumptions! 
+  - Each decision should be based on solid evidence which you already know.
+- Avoid outputting '(E)' too readily, as this option indicates you don't know the answer. If there's any information available to solve the question, make full use of it.
+
+Below is an example of solving each question.
+
+[EXAMPLE]
+- Question:
+Sophia: Who became the CEO of Apple in August 2011, following the resignation of Steve Jobs?
+	(A) Satya Nadella
+	(B) Sundar Pichai
+	(C) Jeff Bezos
+	(D) Tim Cook   
+	(E) I don't know. (None of the above)  
+
+- Answer: (D)
+
+It is common knowledge that Tim Cook became the CEO of Apple in August 2011, succeeding Steve Jobs. It is highly likely that you are already aware of this fact.
+Assuming that you have the necessary knowledge to solve the question, the correct answer is '(D) Tim Cook', so you should output '(D)'.
+However, if you did not know that Tim Cook became the CEO of Apple in August 2011, then the question would be unanswerable for you. In that case, you should output '(E)'.
+========================================
+Please note that you should output only a SINGLE option from [(A), (B), (C), (D), (E)], without any intermediate steps.
+
+Now, let's solve the question:
+
+- Question: 
+{question}
+
+- Answer:

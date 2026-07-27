@@ -1,0 +1,60 @@
+You are an intelligent language model.
+Your task is to select the FINAL question subject(s) for a given question, choosing ONLY from a given list of candidate subjects.
+
+A question subject refers to the person or object that the question is mainly focused on.
+
+You are given a list of candidate subjects for the question. You must pick the final answer FROM THIS GIVEN LIST ONLY.
+
+[REQUIREMENTS]
+1. You should not directly answer the question, but only identify its subject.
+For example, if the question is 'Who was the vice president of Barack Obama?', you should not answer 'Joe Biden', even though he was actually Barack Obama's vice president.
+Instead, you should answer 'Barack Obama' because he is the main focus of the question.
+2. If the question contains a first-person pronoun ('I', 'my', 'me', 'mine') and the questioner appears in the given list, include the questioner as a subject — the questioner is highly likely to be the subject in this case.
+3. **You MUST choose the question subject(s) ONLY from the given list (verbatim). Do NOT output any entity that is not present in the given list, even if you think a better subject exists outside it. Anything outside the given list cannot be a valid subject.**
+4. If none of the items in the given list is the subject of the question, output an empty list.
+5. Your answer must be a list of strings, each element being EXACTLY one of the items in the given list (copy it verbatim).
+6. Return up to {k} question subjects.
+
+[Examples]
+Example 1.
+- Question: "Lily and Daniel established this company on November 28, 2000. Do you know the name of this company?"
+- Questioner: Michael
+- Options for question subject: ["company", "past", "Daniel", "name", "this company", "Lily"]
+- Constraint: Returning up to 3 question subject
+- Question subject: ["Lily", "Daniel"]
+- Explanation: 
+    - The question is fundamentally centered on the company created by Lily and Daniel. Both "Lily" and "Daniel" are present in the given list, so they are selected.
+    - Since it holds that "length of a list ["Lily", "Daniel"] <= 3", this list can be a final output without any additional process.
+
+Example 2.
+- Question: "What did Katie write on the chalkboard as the result of 2 + 3, when John was playing soccer with his friends?"
+- Questioner: Marry
+- Options for question subject: ["Katie", "chalkboard", "result", "John", "2 + 3", "5"]
+- Constraint: Returning up to 7 question subject
+- Question subject: ["Katie"]
+- Explanation: 
+    - The question asks about an action by "Katie", which is in the given list. John/chalkboard are only context.
+    - Since it holds that "length of a list ["Katie"] <= 7", this list can be a final output without any additional process.
+
+Example 3.
+- Question: "Do you remember the chat we had in August 10, 2009? Who was the one who said 'Oh my gosh!'?"
+- Questioner: Ellie
+- Options for the question subject: ["Ellie", "chat", "Oh my gosh"]
+- Constraint: Returning up to 1 question subject
+- Question subject: []
+- Explanation: 
+    - The subject is an unidentified speaker, not any concrete item in the given list. So output an empty list.
+    - Since it holds that "length of an empty list <= 1", an empty list can be a final output without any additional process.
+
+========================================
+You are given a list of candidate subjects ({options}) for this question.
+Select up to {k} MOST LIKELY question subject(s) from this given list.
+    - Each question subject **MUST** be exactly one of the items in the given list (copy it verbatim) — never include any entity that is not in the given list.
+Do NOT output any intermediate steps leading to the final answer.
+Your final output must be a list of strings, with each element being exactly one of the items in the given list.
+
+- Question: {question}
+- Questioner: {questioner}
+- Options for the question subject: {options}
+- Constraint: Returning up to {k} question subject
+- Question subject:

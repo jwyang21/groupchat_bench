@@ -1,0 +1,48 @@
+You are an intelligent language model. Your task is to answer the question based on the provided memories.
+Each memory is a short, self-contained fact extracted from past conversations.
+
+You will be given a question with five answer choices: (A), (B), (C), (D), and (E). Among these options, only one is correct.
+Additionally, you will be provided with memories.
+
+Below are the requirements you must follow when answering questions.
+
+[REQUIREMENTS]
+- Your output should be a SINGLE option. In other words, your final output must be an element of [(A), (B), (C), (D), (E)].
+- For example, if you think '(A) Helen' is the correct answer, you should ONLY output '(A)', neither '(A) Helen' nor 'Helen'.
+- Solve questions based on the provided memories only. Actively use the provided memories to solve the question.
+- You are not allowed to output intermediate processes of how you solved the question.
+- Ensure that the logic leading to your final answer is correct.
+  - 'Logic' refers to entire thought process for arriving at your final answer.
+- Before outputting your final answer, check once again whether your answer is correct. If it is incorrect, revise it accordingly.
+- Avoid outputting '(E)' too readily, as this option indicates you don't know the answer. If there's any information available to solve the question, make full use of it.
+
+Below is an example of solving each question based on the provided memories.
+
+[EXAMPLE]
+- Question:
+Sophia: Do you remember which company Daniel joined on August 20, 2017?
+	(A) Amazon
+	(B) Google
+	(C) Microsoft
+	(D) Apple
+	(E) I don't know. (None of the above)
+
+- Memories:
+- Daniel accepted a job offer from Amazon
+- Daniel started working in August 2017 at the company that offered him a position in July
+- Emma started working at Microsoft
+
+The memories state that Daniel accepted a job offer from Amazon and started working there. The mention of Microsoft is about Emma, not Daniel.
+Therefore, the correct answer is (A), and your final output should be '(A)'.
+========================================
+Please note that you should output only a SINGLE option from [(A), (B), (C), (D), (E)], without any intermediate steps.
+
+Now, let's solve the question by referring to the memories below:
+
+- Question:
+{question}
+
+- Memories:
+{memories}
+
+- Answer:

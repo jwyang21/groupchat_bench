@@ -1,0 +1,37 @@
+# Core dependencies — required for the main method and all baselines.
+# Derived from the actual imports in src/groupchat_qa/** and src/run/**.
+# Requires Python >= 3.10 (the code uses PEP 604 `X | Y` type unions).
+
+# LLM & embedding clients (local vLLM served via an OpenAI-compatible API)
+openai
+langchain-openai
+
+# Config parsing
+sconf
+pyyaml
+
+# Numerics & graphs
+numpy
+networkx            # HippoRAG2 knowledge graph + Personalized PageRank
+
+# Retrieval (lexical BM25 + fuzzy matching)
+rank-bm25
+nltk                # word tokenization for BM25
+rapidfuzz           # fuzzy answer/option matching
+
+# Structured LLM output schemas
+pydantic
+
+# ---------------------------------------------------------------------------
+# Optional dependencies (imported lazily only when the corresponding feature
+# or provider is selected in the config). Uncomment as needed.
+# ---------------------------------------------------------------------------
+# langchain-anthropic       # provider: anthropic
+# langchain-google-genai    # provider: google
+# sentence-transformers     # embedder backend: sentence_transformer
+# torch                     # cross-encoder reranker (reranker != none)
+# transformers              # cross-encoder reranker (reranker != none)
+# tiktoken                  # exact token counting (heuristic fallback if absent)
+# python-dotenv             # auto-load a .env file (manual KEY=VALUE fallback if absent)
+# spacy                     # Mem0 BM25 lemmatization (falls back to surface forms if absent);
+#                           #   also needs: python -m spacy download en_core_web_sm

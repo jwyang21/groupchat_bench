@@ -1,0 +1,55 @@
+# Example config: A-MEM baseline (arXiv 2502.12110). Friends, newname, trial 0, Qwen.
+# Two-phase: commit (build memory, commit_only: true) then QA run (set commit_only: false).
+# Run with: PYTHONPATH=src python src/run/main.simulate.py --config configs/baselines/a_mem.qwen.friends.newname.t0.yaml --out result.json
+
+data:
+  dataset_root: ./data/v1_3_1/friends
+  data_type: newname
+  trial: 0
+  ie_type: openie
+  normalization: raw
+  per_llm_precomputed: false
+llms:
+- name: qwen3.5-35b-a3b-on
+  provider: vllm
+  model_name: qwen3.5-35b-a3b-on
+  host: <VLLM_HOST>        # e.g. localhost or your vLLM server IP
+  port: <VLLM_PORT>        # e.g. 8000
+  api_key: EMPTY
+  temperature: 0.6
+  top_p: 0.95
+  max_tokens: 8192
+  system_prompt: You are a helpful assistant.
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+    thinking_token_budget: 6000
+  extra_base_urls: []
+embedder:
+  backend: openai
+  model: text-embedding-3-small
+  cache: true
+memory:
+  name: a_mem
+  k_neighbors: 5
+  num_retrieved: 100
+  context_size: 8000
+  question_format: multi_structured
+  split_link_evolution: false
+  include_linked: true
+  prompt_note: a_mem_note_construction.txt
+  prompt_evolution: a_mem_evolution.txt
+  prompt_link: a_mem_link_judge.txt
+  snapshot_dir: ./result/baseline_snapshots/v1_3_1_newname_t0
+  turns_per_note: 5
+  extract_cache: true
+  session_checkpoint: true
+run:
+  seed: 42
+  start_session_idx: 0
+  end_session_idx: 9999
+  session_filter: all
+  commit_only: true
+  log_prompts: true
+  answer_max_workers: 16
+  commit_extract_workers: 6

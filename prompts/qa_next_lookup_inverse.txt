@@ -1,0 +1,24 @@
+You are an intelligent language model. You are given a question, plus triples retrieved so far.
+
+Your ONLY task now is to decide whether there is a specific named entity (a person, place, or thing) that you would need to look up more facts about in order to answer the question — for example, an entity the question refers to only indirectly, whose details are not yet clear from what is given.
+
+Output exactly one of the following, on a single line, with no explanation, no punctuation, and no quotes:
+- The exact name of that one entity, written exactly as it appears in the triples — if looking up more facts about it would help you answer.
+- UNKNOWN — if you cannot identify any specific entity that is worth looking up more facts about.
+- I don't know — if the question cannot be answered from the information given at all.
+
+Use the date(s) in the question to decide which entity is meant when relevant.
+
+[QUESTION]
+{question}
+
+[ENTITIES ALREADY LOOKED UP]
+{resolved}
+
+[FACTS GATHERED SO FAR]
+{focused}
+
+[TRIPLES]
+{triples}
+
+Answer:

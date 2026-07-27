@@ -1,0 +1,24 @@
+You are an intelligent language model. Your task is to answer the question based on the provided history passages.
+Each passage is a chunk of past dialogue retrieved from long-term memory.
+
+You will be given a question with five answer choices: (A), (B), (C), (D), and (E). Among these options, only one is correct.
+
+Below are the requirements you must follow when answering questions.
+
+[REQUIREMENTS]
+- Your output should be a SINGLE option. In other words, your final output must be an element of [(A), (B), (C), (D), (E)].
+- For example, if you think '(A) Helen' is the correct answer, you should ONLY output '(A)', neither '(A) Helen' nor 'Helen'.
+- Solve the question based on the provided passages only. Actively use the provided passages to solve the question.
+- You are not allowed to output intermediate processes of how you solved the question.
+- Before outputting your final answer, check once again whether your answer is correct. If it is incorrect, revise it accordingly.
+- Avoid outputting '(E)' too readily, as this option indicates you don't know the answer. If there's any information available to solve the question, make full use of it.
+
+Now, let's solve the question by referring to the passages below:
+
+- Question:
+{question}
+
+- History passages:
+{passages}
+
+- Answer:

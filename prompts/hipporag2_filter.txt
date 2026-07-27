@@ -1,0 +1,76 @@
+You are a critical component of a high-stakes question-answering system. Your task is to filter candidate facts based on their relevance to a given query, keeping only the facts that are crucial for answering it. The query may require multi-hop reasoning that connects several facts.
+
+Requirements:
+- Select up to {top_k} relevant facts from the candidate list that have a strong connection to the query.
+- You must ONLY use facts from the candidate list. Do NOT generate new facts.
+- If no candidate fact is relevant, return an empty list.
+- Output a JSON object of the form {"fact": [["subject", "predicate", "object"], ...]}.
+
+[EXAMPLE 1]
+Question: Are Imperial River (Florida) and Amaradia (Dolj) both located in the same country?
+Candidate facts:
+[["imperial river", "is located in", "florida"], ["imperial river", "is a river in", "united states"], ["imperial river", "may refer to", "south america"], ["amaradia", "flows through", "ro ia de amaradia"], ["imperial river", "may refer to", "united states"]]
+Output: {"fact": [["imperial river", "is located in", "florida"], ["imperial river", "is a river in", "united states"], ["amaradia", "flows through", "ro ia de amaradia"]]}
+
+[EXAMPLE 2]
+Question: When is the director of film The Ancestor 's birthday?
+Candidate facts:
+[["jean jacques annaud", "born on", "1 october 1943"], ["tsui hark", "born on", "15 february 1950"], ["pablo trapero", "born on", "4 october 1971"], ["the ancestor", "directed by", "guido brignone"], ["benh zeitlin", "born on", "october 14  1982"]]
+Output: {"fact": [["the ancestor", "directed by", "guido brignone"]]}
+
+[EXAMPLE 3]
+Question: In what geographic region is the country where Teafuone is located?
+Candidate facts:
+[["teafuaniua", "is on the", "east"], ["motuloa", "lies between", "teafuaniua"], ["motuloa", "lies between", "teafuanonu"], ["teafuone", "is", "islet"], ["teafuone", "located in", "nukufetau"]]
+Output: {"fact": [["teafuone", "is", "islet"], ["teafuone", "located in", "nukufetau"]]}
+
+[EXAMPLE 4]
+Question: When did the director of film S.O.B. (Film) die?
+Candidate facts:
+[["allan dwan", "died on", "28 december 1981"], ["s o b", "written and directed by", "blake edwards"], ["robert aldrich", "died on", "december 5  1983"], ["robert siodmak", "died on", "10 march 1973"], ["bernardo bertolucci", "died on", "26 november 2018"]]
+Output: {"fact": [["s o b", "written and directed by", "blake edwards"]]}
+
+[EXAMPLE 5]
+Question: Do both films: Gloria (1980 Film) and A New Life (Film) have the directors from the same country?
+Candidate facts:
+[["sebasti n lelio watt", "received acclaim for directing", "gloria"], ["gloria", "is", "1980 american thriller crime drama film"], ["a brand new life", "is directed by", "ounie lecomte"], ["gloria", "written and directed by", "john cassavetes"], ["a new life", "directed by", "alan alda"]]
+Output: {"fact": [["gloria", "is", "1980 american thriller crime drama film"], ["gloria", "written and directed by", "john cassavetes"], ["a new life", "directed by", "alan alda"]]}
+
+[EXAMPLE 6]
+Question: What is the date of death of the director of film The Old Guard (1960 Film)?
+Candidate facts:
+[["the old guard", "is", "1960 french comedy film"], ["gilles grangier", "directed", "the old guard"], ["the old guard", "directed by", "gilles grangier"], ["the old fritz", "directed by", "gerhard lamprecht"], ["oswald albert mitchell", "directed", "old mother riley series of films"]]
+Output: {"fact": [["the old guard", "is", "1960 french comedy film"], ["gilles grangier", "directed", "the old guard"], ["the old guard", "directed by", "gilles grangier"]]}
+
+[EXAMPLE 7]
+Question: When is the composer of film Aulad (1968 Film) 's birthday?
+Candidate facts:
+[["aulad", "has music composed by", "chitragupta shrivastava"], ["aadmi sadak ka", "has music by", "ravi"], ["ravi shankar sharma", "composed music for", "hindi films"], ["gulzar", "was born on", "18 august 1934"], ["aulad", "is a", "1968 hindi language drama film"]]
+Output: {"fact": [["aulad", "has music composed by", "chitragupta shrivastava"], ["aulad", "is a", "1968 hindi language drama film"]]}
+
+[EXAMPLE 8]
+Question: How many households were in the city where Angelical Tears located?
+Candidate facts:
+[["dow city", "had", "219 households"], ["tucson", "had", "229 762 households"], ["atlantic city", "has", "15 504 households"], ["angelical tears", "located in", "oklahoma city"], ["atlantic city", "had", "15 848 households"]]
+Output: {"fact": [["angelical tears", "located in", "oklahoma city"]]}
+
+[EXAMPLE 9]
+Question: Did the movies In The Pope'S Eye and Virgin Mountain, originate from the same country?
+Candidate facts:
+[["virgin mountain", "released in", "icelandic cinemas"], ["virgin mountain", "directed by", "dagur k ri"], ["virgin mountain", "icelandic title is", "f si"], ["virgin mountain", "won", "2015 nordic council film prize"], ["virgin mountain", "is a", "2015 icelandic drama film"]]
+Output: {"fact": [["virgin mountain", "released in", "icelandic cinemas"], ["virgin mountain", "directed by", "dagur k ri"], ["virgin mountain", "icelandic title is", "f si"], ["virgin mountain", "won", "2015 nordic council film prize"], ["virgin mountain", "is a", "2015 icelandic drama film"]]}
+
+[EXAMPLE 10]
+Question: Which film has the director who died earlier, The Virtuous Model or Bulldog Drummond'S Peril?
+Candidate facts:
+[["the virtuous model", "is", "1919 american silent drama film"], ["bulldog drummond s peril", "directed by", "james p  hogan"], ["the virtuous model", "directed by", "albert capellani"], ["bulldog drummond s revenge", "directed by", "louis king"], ["bulldog drummond s peril", "is", "american film"]]
+Output: {"fact": [["the virtuous model", "is", "1919 american silent drama film"], ["bulldog drummond s peril", "directed by", "james p  hogan"], ["the virtuous model", "directed by", "albert capellani"], ["bulldog drummond s peril", "is", "american film"]]}
+
+Now filter the candidate facts for the query below.
+
+Question: {question}
+
+Candidate facts:
+{facts}
+
+Output:

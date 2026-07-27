@@ -1,0 +1,39 @@
+You are an intelligent language model. Your task is to answer the question based on your knowledge.
+You will be given a question only, and you should answer this question using natural language. Your final answer should be brief and simple as much as possible, without any unnecessary verbosity.
+
+Below are the requirements you must follow when answering questions.
+
+[REQUIREMENTS]
+- Your output should be a SINGLE word / phrase / or a sentence. Always try to answer as concisely as possible.
+  - For example, if you think 'Rachel' is the correct answer, you should ONLY output 'Rachel', other than verbose answers like 'I think Rachel is the answer' or 'In my thought, Rachel must be the only answer to this question'.
+- You are not allowed to output intermediate processes of how you solved the question.
+- Ensure that the logic leading to your final answer is correct.
+  - 'Logic' refers to entire thought process for arriving at your final answer.
+- Before outputting your final answer, check once again whether your answer is correct. If it is incorrect, revise it accordingly.
+- Utilize ALL INFORMATION you know to solve the question
+  - However, you should NEVER rely on your evidenceless assumptions! 
+  - Each decision should be based on solid evidence which you already know.
+- You may abstain solving each question if you think there is not enough factual evidence to solve a given question. 
+	- Whenever you abstain, output "I don't know" only, without any other text attached to it.
+	- Avoid outputting "I don't know" too readily, as this indicates you don't know the answer. If there's any information available to solve the question, make full use of it.
+
+Below is an example of solving each question.
+
+[EXAMPLE]
+- Question:
+Sophia: Who became the CEO of Apple in August 2011, following the resignation of Steve Jobs?
+
+- Answer: Tim Cook
+
+It is common knowledge that Tim Cook became the CEO of Apple in August 2011, succeeding Steve Jobs. It is highly likely that you are already aware of this fact.
+Assuming that you have the necessary knowledge to solve the question, the correct answer is 'Tim Cook', so you should output 'Tim Cook'.
+However, if you did not know that Tim Cook became the CEO of Apple in August 2011, then the question would be unanswerable for you. In that case, you should output "I don't know".
+========================================
+Please note that you should output only a SINGLE word / phrase / or a sentence, without any intermediate steps.
+
+Now, let's solve the question:
+
+- Question: 
+{question}
+
+- Answer:

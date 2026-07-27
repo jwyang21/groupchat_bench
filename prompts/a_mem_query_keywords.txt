@@ -1,0 +1,8 @@
+Given the following question, generate several keywords, using 'cosmos' as the separator.
+
+Question: {question}
+
+Format your response as a JSON object with a "keywords" field containing the selected text.
+
+Example response format:
+{"keywords": "keyword1, keyword2, keyword3"}

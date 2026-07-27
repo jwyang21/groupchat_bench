@@ -1,0 +1,56 @@
+# Example config: HippoRAG 2 baseline (arXiv 2502.14802). Friends, newname, trial 0, Qwen.
+# Two-phase commit then QA run via src/run/main.simulate.py (see A-MEM example header).
+
+data:
+  dataset_root: ./data/v1_3_1/friends
+  data_type: newname
+  trial: 0
+  ie_type: openie
+  normalization: raw
+  per_llm_precomputed: false
+llms:
+- name: qwen3.5-35b-a3b-on
+  provider: vllm
+  model_name: qwen3.5-35b-a3b-on
+  host: <VLLM_HOST>        # e.g. localhost or your vLLM server IP
+  port: <VLLM_PORT>        # e.g. 8000
+  api_key: EMPTY
+  temperature: 0.6
+  top_p: 0.95
+  max_tokens: 8192
+  system_prompt: You are a helpful assistant.
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+    thinking_token_budget: 6000
+  extra_base_urls: []       # optional: additional vLLM endpoints for load-balancing
+embedder:
+  backend: openai
+  model: text-embedding-3-small
+  cache: true
+memory:
+  name: hipporag2
+  synonymy_sim_threshold: 0.8
+  synonymy_topk: 2047
+  linking_top_k: 5
+  passage_node_weight: 0.05
+  damping: 0.5
+  num_retrieved: 40
+  context_size: 8000
+  use_filter: true
+  question_format: multi_structured
+  prompt_openie: hipporag2_openie.txt
+  prompt_filter: hipporag2_filter.txt
+  prompt_qa: hipporag2_qa.txt
+  snapshot_dir: ./result/baseline_snapshots/v1_3_1_newname_t0
+  extract_cache: true
+  session_checkpoint: true
+run:
+  seed: 42
+  start_session_idx: 0
+  end_session_idx: 9999
+  session_filter: all
+  commit_only: true
+  log_prompts: true
+  answer_max_workers: 16
+  commit_extract_workers: 6

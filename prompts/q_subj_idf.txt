@@ -1,0 +1,69 @@
+You are an intelligent language model. 
+Your task is to identify question subject from given question, referring to a set of provided candidates.
+A question subject refers to the person or object that the question is mainly focused on.
+
+Below are the requirements and examples about this task.
+
+[REQUIREMENTS]
+1. You should not directly answer the question, but only identify its subject.
+For example, if the question is 'Who was the vice president of Barack Obama?', you should not answer 'Joe Biden', even though he was actually Barack Obama's vice president. 
+Instead, you should answer 'Barack Obama' because he is the main focus of the question.
+2. If the subject of the question is ambiguous and the question contains 'I,' 'my,' 'me,' or 'mine,' identify the questioner as the subject. 
+    - Since the questioner is the one asking the question, he/she is highly likely to be the question subject in this case.
+3. If you think that there is no question subject in the given question, output an empty list.
+4. Your answer must be a list of strings (e.g., ["Isla", "Jenny", "Benjamin"], ["Jerry"], ["Harry", "Charlie"], etc.)
+5. You **MUST RETURN UP TO {k} CANDIDATES** FOR THE QUESTION SUBJECT, as a final output.
+    - Before generating your final output, carefully analyze the question and the provided options.
+
+[Examples]
+Example 1.
+- Question: "Lily and Daniel established this company on November 28, 2000. Do you know the name of this company?"
+- Questioner: Michael
+- Options for question subject: ["company", "past", "Daniel", "name", "this company", "Lily"]
+- Constraint: Returning up to 1 question subject
+- Question subject: ["Lily"] or ["Daniel"]
+- Explanation: 
+    - The question asks for the name of a company, but the context provided attributes the company's existence directly to "Lily" and "Daniel". The core information sought is tied to an entity that they created. Therefore, the question is fundamentally centered on the actions and creations of Lily and Daniel, making them the primary subjects of the inquiry. 
+    - However, since up to 1 question subject should be returned, the final output should be either ["Lily"] or ["Daniel"]. If the constraint was to output up to 2 or more question subjects, the final output should be ["Lily", "Daniel"] or ["Daniel", "Lily"] (The order of elements inside the output list does not matter).
+
+Example 2.
+- Question: "Do you remember the chat we had in August 10, 2009 and November 23, 2010? Who was the one who said 'Oh my gosh!'?"
+- Questioner: Ellie
+- Options for the question subject: ["Ellie", "chat", "Oh my gosh"]
+- Constraint: Returning up to 7 question subject
+- Question subject: []
+- Explanation: 
+    - The question asks to identify an unknown speaker ("Who was the one..."). The subject is this unidentified person. Because this person is not a specific, named entity within the context of the question, there is no concrete subject to extract. As per the instructions, when no question subject can be clearly identified, the output should be an empty list.
+    - Since it holds that "length of an empty list <= 7", an empty list can be a final output without any additional process.
+
+Example 3.
+- Question: "What did Katie write on the chalkboard as the result of 2 + 3, when John was playing soccer with his friends?"
+- Questioner: Marry
+- Options for question subject: ["Katie", "chalkboard", "result", "John", "2 + 3", "5"]
+- Constraint: Returning up to 5 question subject
+- Question subject: ["Katie"]
+- Explanation: 
+    - The question directly asks about an action performed by a specific individual: "What did Katie write...". While other elements like John and the chalkboard are mentioned, they only provide circumstantial context. The main focus of the question is squarely on Katie and what she did, making her the sole subject.
+    - Since it holds that "length of a list ["Katie"] <= 5", ["Katie"] can be a final output without any additional process.
+
+Example 4. 
+- Question: "Oh, I totally forgot what I bought in the supermarket this morning. Do you remember what it was?"
+- Questioner: Maria
+- Options for the question subject: ["supermarket", "morning", "bought"]
+- Constraint: Returning up to 3 question subject
+- Question subject: ["Maria"]
+- Explanation: 
+    - This question centers on the questioner's, Maria's, personal experience—specifically, her lapse in memory. The use of the first-person pronoun "I" ("I totally forgot what I bought") indicates that the problem and the required information are about the questioner herself. Following the rule that identifies the questioner as the subject in cases of ambiguity involving personal pronouns, "Maria" is correctly identified as the subject.
+    - Since it holds that "length of a list ["Maria"] <= 3", ["Maria"] can be a final output without any additional process.
+========================================
+You will be given a question, a questioner, and a set of options for the question subject.
+Your task is to return up to {k} candidates for the question subject after carefully analyzing the question and the provided options.
+    - Each output **MUST** be exactly one of the items in the given list (copy it verbatim) — never output any entity that is not in the given list.
+Do NOT output any intermediate steps leading to the final answer.
+Your final output must be a list of strings, with each element representing a candidate for the question subject.
+
+- Question: {question}
+- Questioner: {questioner}
+- Options for the question subject: {options}
+- Constraint: Returning up to {k} question subject
+- Question subject: 

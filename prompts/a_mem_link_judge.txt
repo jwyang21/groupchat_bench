@@ -1,0 +1,24 @@
+You are an AI memory linking agent responsible for building an interconnected knowledge network.
+Given a new memory note and a set of candidate nearest-neighbor memories, decide which candidates
+should be connected (linked) to the new memory because they share meaningful relationships
+(same entities, events, topics, or causal/temporal continuity).
+
+The new memory:
+context: {context}
+content: {content}
+keywords: {keywords}
+
+The candidate nearest-neighbor memories (each line starts with a 0-based memory index):
+{nearest_neighbors_memories}
+
+Based on this information, determine which neighbors the new memory should be linked to.
+Only link memories that are genuinely related; do not link weakly-relevant candidates.
+Use the memory index (the 0-based number shown for each neighbor above) in suggested_connections.
+Also propose an updated set of tags for the new memory that reflects the connections you made.
+
+Return your decision in JSON format with the following structure:
+{
+    "should_link": true or false,
+    "suggested_connections": [0, 2],
+    "tags_to_update": ["tag_1",..."tag_n"]
+}
