@@ -93,7 +93,7 @@ Baseline configs live in `configs/baselines/` (`a_mem`, `mem0`, `hipporag2`, `or
 
 `main.simulate.py` first builds (commits) the memory from the dialogue, then answers the questions; pass `--commit-only` to build the memory snapshot without running QA.
 
-## Results
+<!-- ## Results
 
 Results are produced per (dataset × method × trial) as JSON files containing per-question predictions and an accuracy summary. We report answer accuracy on the multiple-choice benchmark and analyze retrieval quality against the oracle upper bound.
 
@@ -105,9 +105,9 @@ Results are produced per (dataset × method × trial) as JSON files containing p
 | Mem0       | TODO | TODO | TODO |
 | HippoRAG2  | TODO | TODO | TODO |
 | **Ours (TKG retrieval)** | TODO | TODO | TODO |
-| Oracle (upper bound) | TODO | TODO | TODO |
+| Oracle (upper bound) | TODO | TODO | TODO | -->
 
-## Citation
+<!-- ## Citation
 
 ```bibtex
 @article{TODO_citation_key,
@@ -116,7 +116,7 @@ Results are produced per (dataset × method × trial) as JSON files containing p
   journal = {TODO: Venue},
   year    = {TODO}
 }
-```
+``` -->
 
 ## License
 
