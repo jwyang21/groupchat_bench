@@ -99,7 +99,7 @@ Results are produced per (dataset × method × trial) as JSON files containing p
 
 <!-- TODO: add the results table once final numbers are ready. -->
 
-| Method | Friends | BigBang | TheOffice |
+<!-- | Method | Friends | BigBang | TheOffice |
 |--------|---------|---------|-----------|
 | A-MEM      | TODO | TODO | TODO |
 | Mem0       | TODO | TODO | TODO |
