@@ -1,4 +1,4 @@
-# Temporal Knowledge-Graph Retrieval for Long-Term Group-Chat Question Answering
+# GroupChat-Bench: Benchmarking LLM Agents on Long-Term Understanding of Realistic Group Chats
 
 This repository contains the code for studying **question answering over long-term, multi-party (group-chat) conversations**. Given a long dialogue history among several speakers, a model must answer time-sensitive questions (e.g. *"Which company did Daniel join?"*) that require retrieving and reasoning over information scattered across many past sessions. We formulate the task as memory + retrieval over an evolving conversation and evaluate on a DialSim-derived benchmark spanning three shows (Friends, BigBang, TheOffice). Our proposed method builds a **temporal knowledge graph** from the dialogue and performs seed-node-guided, iterative retrieval that combines graph facts with dialogue passages, avoiding the future-information leakage that naïve snapshot retrieval introduces. We compare against strong memory baselines (A-MEM, Mem0, HippoRAG2) and an oracle upper bound.
 
