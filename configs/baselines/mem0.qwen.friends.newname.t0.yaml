@@ -18,7 +18,7 @@ llms:
   api_key: EMPTY
   temperature: 0.6
   top_p: 0.95
-  max_tokens: 8192
+  max_tokens: 16384
   system_prompt: You are a helpful assistant.
   extra_body:
     chat_template_kwargs:
@@ -31,7 +31,7 @@ embedder:
 memory:
   name: mem0
   top_s: 10
-  top_k: 600
+  top_k: 1700
   context_size: 8000
   question_format: multi_structured
   prompt_fact_extraction: mem0_fact_triple_extraction.txt
