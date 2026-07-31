@@ -1,6 +1,6 @@
 # GroupChat-Bench: Benchmarking LLM Agents on Long-Term Understanding of Realistic Group Chats
 
-This repository contains the code for studying **question answering over long-term, multi-party (group-chat) conversations**. Given a long dialogue history among several speakers, a model must answer time-sensitive questions (e.g. *"Which company did Daniel join?"*) that require retrieving and reasoning over information scattered across many past sessions. We formulate the task as memory + retrieval over an evolving conversation and evaluate on a DialSim-derived benchmark spanning three shows (Friends, BigBang, TheOffice). Our proposed method builds a **temporal knowledge graph** from the dialogue and performs seed-node-guided, iterative retrieval that combines graph facts with dialogue passages, avoiding the future-information leakage that naïve snapshot retrieval introduces. We compare against strong memory baselines (A-MEM, Mem0, HippoRAG2) and an oracle upper bound.
+This repository contains the code for studying **question answering over long-term, multi-party (group-chat) conversations**. Given a long dialogue history among several speakers, a model must answer time-sensitive questions (e.g. *"Which company did Daniel join?"*) that require retrieving and reasoning over information scattered across many past sessions. We formulate the task as memory + retrieval over an evolving conversation and evaluate on a GroupChat-Bench-derived benchmark spanning three shows (Friends, BigBang, TheOffice). Our proposed method builds a **temporal knowledge graph** from the dialogue and performs seed-node-guided, iterative retrieval that combines graph facts with dialogue passages, avoiding the future-information leakage that naïve snapshot retrieval introduces. We compare against strong memory baselines (A-MEM, Mem0, HippoRAG2) and an oracle upper bound.
 
 ## Key Features
 
@@ -57,9 +57,9 @@ export OPENAI_API_KEY=sk-...   # used for text-embedding-3-small embeddings
 
 ## Data
 
-Experiments use a **DialSim-derived** benchmark of long-term group-chat dialogues for three shows (Friends, BigBang, TheOffice). Each show is available in several `data_type` variants (e.g. `newname`, `normal`, `shuffled`) and multiple trials. Per session we store the dialogue, per-timepoint question sets, and precomputed quadruples/embeddings under a `data/` directory tree that the configs reference via `dataset_root`.
+Experiments use a **GroupChat-Bench-derived** benchmark of long-term group-chat dialogues for three shows (Friends, BigBang, TheOffice). Each show is available in several `data_type` variants (e.g. `newname`, `normal`, `shuffled`) and multiple trials. Per session we store the dialogue, per-timepoint question sets, and precomputed quadruples/embeddings under a `data/` directory tree that the configs reference via `dataset_root`.
 
-The raw benchmark data is **not** included in this repository. Point `dataset_root` in the configs at your local copy of the preprocessed data.
+The raw Groupchat-Bench data is available in this [link](https://drive.google.com/file/d/1-MjPm9bH7-0lNLl9cG1U_KKdU-t2BISO/view?usp=drive_link).
 
 ## Usage
 
