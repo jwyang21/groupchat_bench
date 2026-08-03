@@ -27,7 +27,7 @@ when each question is posed.
 
 **GroupChat-Mem** is a dual-view memory built online from the dialogue only:
 
-- **Relational memory R.** At each turn, an LLM performs **Open Information Extraction
+- **Relational memory $\mathcal{R}$.** At each turn, an LLM performs **Open Information Extraction
   (OpenIE)** over the (partial) session and produces **`[subject, relation, object]`**
   records (open-schema — no predefined entity types or relation labels). Subjects and
   objects become nodes and relations become edges; each record carries its source
@@ -35,17 +35,17 @@ when each question is posed.
   forming a graph-structured relational memory. Re-extraction uses the *complete* partial
   session and **replaces** the previous extraction, so earlier records are revised as later
   utterances resolve references.
-- **Raw session repository S.** Each original session is stored verbatim, preserving exact
+- **Raw session repository $\mathcal{S}$.** Each original session is stored verbatim, preserving exact
   wording, local discourse context, and conversational nuances that a compressed
   representation may omit.
 
 Given a query, GroupChat-Mem retrieves evidence from **both** views in parallel and, if the
 initial answer is insufficient, performs a fine-grained traversal over R:
 
-1. **From R** — the LLM identifies the top-**n** query-relevant nodes; a **two-hop**
+1. **From $\mathcal{R}$** — the LLM identifies the top-**n** query-relevant nodes; a **two-hop**
    neighborhood is built around each; the records are linearized, ranked by cosine
    similarity to the query (OpenAI embeddings), and the top-**k_r** records are kept.
-2. **From S** — each session is a retrieval unit; **k_s** sessions are retrieved,
+2. **From $\mathcal{S}$** — each session is a retrieval unit; **k_s** sessions are retrieved,
    **half by BM25** (lexical) and **half by embedding cosine similarity** (semantic).
 3. **Response** — the LLM generates an initial answer and judges its sufficiency. If
    sufficient, it is returned. Otherwise GroupChat-Mem traverses R: it picks the most
