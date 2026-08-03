@@ -132,6 +132,8 @@ selects a character-name setting — `newname` (New Names, the default), `normal
 Names), or `shuffled` (the adversarial Swapped Names) — and `trial` selects one of the
 three sampled question sets used for the reported mean/standard deviation.
 
+The raw GroupChat-Bench data is available in this ![link](https://drive.google.com/file/d/1-MjPm9bH7-0lNLl9cG1U_KKdU-t2BISO/view?usp=drive_link).
+
 ### GroupChat-Mem hyperparameters
 
 | Hyperparameter | Value | Meaning |
