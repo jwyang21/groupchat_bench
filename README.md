@@ -1,5 +1,5 @@
 <!-- Last update: 2026-08-03 -->
-# GroupChat-Mem
+# GroupChat-Bench
 
 **A dual-view memory for long-term understanding of realistic group chats.**
 
