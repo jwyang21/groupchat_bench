@@ -178,20 +178,3 @@ column is in **bold**. Each cell shows accuracy (%) as Qwen3.5 / Gemma4 / GPT-OS
 | **GroupChat-Mem** | **77.8 / 77.6 / 64.8** | 77.5 / **78.9 / 70.3** | **78.7** / 77.1 / **69.0** |
 
 * * *
-
-## License
-
-Released under the [MIT License](LICENSE).
-
-* * *
-
-## Citation
-
-```bibtex
-@inproceedings{groupchatbench,
-  title     = {GroupChat-Bench: Benchmarking LLM Agents on Long-Term Understanding of Realistic Group Chats},
-  author    = {Anonymous},
-  booktitle = {Anonymous submission},
-  year      = {2026}
-}
-```
