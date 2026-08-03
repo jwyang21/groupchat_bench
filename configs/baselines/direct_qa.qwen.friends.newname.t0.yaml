@@ -1,0 +1,45 @@
+# Direct QA (No History) reference baseline. Friends, newname, trial 0, Qwen.
+#   The model answers from parametric knowledge only (no retrieved dialogue history),
+#   quantifying residual pretraining leakage.
+#   Run: PYTHONPATH=src python src/run/run_baseline.py \
+#     --config configs/baselines/direct_qa.qwen.friends.newname.t0.yaml --llms qwen3.5-35b-a3b-on
+
+data:
+  dataset_root: ./data/friends
+  data_type: newname
+  trial: 0
+  per_llm_precomputed: false
+llms:
+  - name: qwen3.5-35b-a3b-on
+    provider: vllm
+    model_name: qwen3.5-35b-a3b-on
+    host: <VLLM_HOST>
+    port: <VLLM_PORT>
+    api_key: EMPTY
+    temperature: 0.6
+    top_p: 0.95
+    max_tokens: 16384
+    extra_body:
+      top_k: 20
+      chat_template_kwargs:
+        enable_thinking: true
+      thinking_token_budget: 10000
+    extra_base_urls: []
+embedder:
+  backend: openai
+  model: text-embedding-3-small
+memory:
+  name: simple_rag
+  no_history: true              # Direct QA: answer with no retrieved history
+  question_format: multi_structured
+run:
+  seed: 42
+  start_session_idx: 0
+  end_session_idx: 9999
+  session_filter: all
+  commit_only: false
+  log_prompts: true
+  log_prompts_dir: ./log/baseline/prompts/direct_qa.friends.newname.t0
+  answer_max_workers: 16
+qa:
+  answer_budget: 10000

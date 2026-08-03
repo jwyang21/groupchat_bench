@@ -119,21 +119,21 @@ class RoundRobinLLM:
         # Decide whether the invoke-wrapper dict returned by _structured_with_fallback is a "failure".
         #   parsing_error not None = dead/timeout/all methods failed → fail over to the next endpoint.
         #   parsing_error None (even if parsed=None) means the endpoint responded normally, so treat
-        #   as success (an empty response is the LLM's own result → normalize_quads handles it with
+        #   as success (an empty response is the LLM's own result → the caller handles it with
         #   count-preserving logic).
         return isinstance(res, dict) and res.get("parsing_error") is not None
 
     def invoke(self, *args: Any, **kwargs: Any):
-        # langchain-style `invoke` interface. per_llm_precompute's en normalize wraps the invoke
+        # langchain-style `invoke` interface. A batch-oriented caller can wrap the invoke
         #   wrappers of _structured_with_fallback (multi-endpoint ChatOpenAI-based) with this pool
         #   to send one batch call to the least-in-flight endpoint.
-        #   Note: en normalize depends on accumulated candidates so its batches are sequential —
-        #     there are no concurrent calls, so in-flight is always 0→1→0 and every batch
+        #   Note: if a caller's batches are strictly sequential (each batch depends on the previous
+        #     result), there are no concurrent calls, so in-flight is always 0→1→0 and every batch
         #     effectively goes to idx0 (low distribution effect). The real value of this pool is
         #     "fail over to the next endpoint if one endpoint dies (dead/timeout) or parse fails".
         #   The wrapper does not raise but swallows into a dict(parsing_error=...), so pass
         #     _invoke_failed as fail_pred to trigger failover based on that dict. If all endpoints
-        #     fail, return the last result dict (including parsing_error) as-is → normalize_quads
+        #     fail, return the last result dict (including parsing_error) as-is → the caller
         #     handles it gracefully.
         return self._call_with_failover("invoke", *args, fail_pred=self._invoke_failed, **kwargs)
 

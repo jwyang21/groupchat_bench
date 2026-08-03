@@ -30,8 +30,8 @@ Core behavior (the core "Mem0" of paper Section 2.1; the graph variant Mem0g is 
   build_qa_prompt — inject retrieved memory + question into the qa_mem0.txt template.
   snapshot / restore — pickle the memory store (text + embedding + metadata).
 
-Differences from the paper/repo (DialSim adaptation):
-  - Official mem0 assumes user/assistant 2-party dialogue. DialSim is multi-party group chat,
+Differences from the paper/repo (group-chat adaptation):
+  - Official mem0 assumes user/assistant 2-party dialogue. Our setting is multi-party group chat,
     so the fact extraction prompt is adapted to extract "facts about multiple speakers"
     (mem0_fact_extraction.txt).
   - Official mem0 receives updates via LLM tool-call (function calling); this repo uses
@@ -576,11 +576,11 @@ class Mem0Memory(Memory):
         q_str = render_question(question, self.question_format)
         evidence = retrieval.rendered or "No relevant memory!"
         prompt = self._fill_qa_template(self._p_qa, q_str, evidence)
-        # Apply the context_size token limit (<=0 = off/unlimited — same policy as tkg_hybrid).
+        # Apply the context_size token limit (<=0 = off/unlimited — same policy as GroupChat-Mem).
         return apply_token_limit(prompt, self.context_size)
 
     # ====================================================================
-    # answer — retrieve → build prompt → generate (same contract as tkg_hybrid)
+    # answer — retrieve → build prompt → generate (same contract as GroupChat-Mem)
     # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
@@ -592,7 +592,7 @@ class Mem0Memory(Memory):
         gen = self.llm.generate(prompt)
         metrics = result.metrics.merge(gen.to_metrics())
         # Preserve the final QA generation's raw + reasoning + final prompt + retrieval rendering
-        # — used by main.simulate's record (same keys as tkg_hybrid).
+        # — used by run_baseline's record (same keys as GroupChat-Mem).
         result.extra["qa_raw_text"] = gen.text
         result.extra["qa_reasoning_text"] = getattr(gen, "reasoning_text", "")
         result.extra["qa_final_prompt"] = prompt

@@ -4,7 +4,7 @@
   - multi_unstructured: "{question} {opt_a}? {opt_b}? ... or {opt_e}?"
   - open_ended       : "{question}" (options removed)
 
-This converts the same data (multi-structured form from the DialSim trial pickle) by
+This converts the same data (multi-structured form) by
 changing *only the format*, on the fly, without generating a separate pickle.
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ def _multi_structured(q: Question) -> str:
     out = f"{q.questioner}: {q.text}\n"
     for i, opt in enumerate(q.options):
         # If there are more than 5 options, OPTION_LABELS[i] would IndexError, so generate
-        #   labels dynamically ((F),(G)..) as a guard (DialSim has 5, but this avoids a crash
+        #   labels dynamically ((F),(G)..) as a guard (5 options by default, but this avoids a crash
         #   on malformed/extended data).
         label = OPTION_LABELS[i] if i < len(OPTION_LABELS) else f"({chr(65 + i)})"
         out += f"\t{label} {opt}\n"

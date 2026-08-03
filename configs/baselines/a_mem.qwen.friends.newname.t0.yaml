@@ -1,9 +1,9 @@
 # Example config: A-MEM baseline (arXiv 2502.12110). Friends, newname, trial 0, Qwen.
 # Two-phase: commit (build memory, commit_only: true) then QA run (set commit_only: false).
-# Run with: PYTHONPATH=src python src/run/main.simulate.py --config configs/baselines/a_mem.qwen.friends.newname.t0.yaml --out result.json
+# Run with: PYTHONPATH=src python src/run/run_baseline.py --config configs/baselines/a_mem.qwen.friends.newname.t0.yaml --out result.json
 
 data:
-  dataset_root: ./data/v1_3_1/friends
+  dataset_root: ./data/friends
   data_type: newname
   trial: 0
   ie_type: openie
@@ -18,7 +18,7 @@ llms:
   api_key: EMPTY
   temperature: 0.6
   top_p: 0.95
-  max_tokens: 16384
+  max_tokens: 8192
   system_prompt: You are a helpful assistant.
   extra_body:
     chat_template_kwargs:
@@ -32,7 +32,7 @@ embedder:
 memory:
   name: a_mem
   k_neighbors: 5
-  num_retrieved: 170
+  num_retrieved: 100
   context_size: 8000
   question_format: multi_structured
   split_link_evolution: false
@@ -40,7 +40,7 @@ memory:
   prompt_note: a_mem_note_construction.txt
   prompt_evolution: a_mem_evolution.txt
   prompt_link: a_mem_link_judge.txt
-  snapshot_dir: ./result/baseline_snapshots/v1_3_1_newname_t0
+  snapshot_dir: ./result/baseline_snapshots/newname_t0
   turns_per_note: 5
   extract_cache: true
   session_checkpoint: true

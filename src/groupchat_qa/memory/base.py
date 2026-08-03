@@ -18,14 +18,14 @@ HippoRAG2's sequential per-session OpenIE takes ~28h):
     there is no temporal leakage.
   The Memory ABC default is `extract`=None and `commit_prepared`=plain
   `commit(session)` (ignoring extract_result), so memories that do not support
-  2-phase (e.g. tkg_hybrid) still work safely as sequential commits in the caller's
+  2-phase (e.g. GroupChat-Mem) still work safely as sequential commits in the caller's
   2-phase loop.
 
 baseline-specific behavior:
   - A-MEM: commit does LLM-driven note metadata + link evolution
   - HippoRAG2: commit does OpenIE, retrieve does PPR
   - Mem0: commit does UPDATE/ADD/DELETE decisions, retrieve is plain dense sim
-  - tkg_hybrid: commit accumulates quadruples, retrieve does q_clf routing + 2-hop traversal
+  - GroupChat-Mem: commit accumulates records, retrieve does dual-view retrieval + traversal
 """
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ class Memory(ABC):
         """Return the final QA prompt with the retrieved result embedded.
 
         Each baseline uses its own prompt template. When `retrieval.rendered` is a
-        single text, embed it directly; when RAG/TKG slots are separated (e.g.
+        single text, embed it directly; when session/record slots are separated (e.g.
         enhanced), use the baseline-specific payload in `retrieval.extra`.
         """
         ...
@@ -112,7 +112,7 @@ class Memory(ABC):
     ) -> tuple[str, RetrievalResult, CallMetrics]:
         """**default**: single retrieve + generate.
 
-        Memories with a special policy (e.g. (E)-fallback in TKGHybridMemory) override this.
+        Memories with a special policy (e.g. (E)-fallback in GroupChatMem) override this.
 
         (1) The caller always passes `current_session=`, so we accept it in the
         signature (avoids TypeError even if unused). (2) Fill the diagnostic extra
@@ -147,7 +147,7 @@ class Memory(ABC):
         changes (placeholders absent from the template are no-ops).
         """
         prompt = qa_template.replace("{question}", q_str)
-        # Fix: {memory} (singular, used by a_mem qa_rag.amem.txt) was missing, leaving
+        # Fix: {memory} (singular, used by some A-MEM QA templates) was missing, leaving
         #   {memory} unreplaced in the a_mem QA prompt. Other method templates have no
         #   {memory}, so this is a no-op there. "{memory}" is not a substring of
         #   "{memories}" (memory vs memori), so order is safe.

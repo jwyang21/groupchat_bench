@@ -1,6 +1,6 @@
-"""Memory factory — instantiate from `memory.name` in config.
+"""Memory factory — instantiate a memory from `memory.name` in the config.
 
-To add a baseline: add one line here + write `memory/<name>.py`.
+To add a baseline: add one branch here and write `memory/<name>.py`.
 """
 from __future__ import annotations
 
@@ -13,20 +13,23 @@ from .base import Memory
 
 
 def make_memory(name: str, llm: LLM, embedder: Embedder, cfg: dict[str, Any]) -> Memory:
-    """memory baseline name → Memory instance.
+    """Map a memory name to a Memory instance.
 
-    Currently supported:
-      - "tkg_hybrid" : our method (q_clf routing + 2-hop TKG + RAG + (E)-fallback)
-      - "a_mem"     : A-MEM (arXiv 2502.12110) — note + link/evolution, dense retrieval
-      - "hipporag2" : HippoRAG 2 (arXiv 2502.14802) — OpenIE KG + Personalized PageRank
-      - "mem0"      : Mem0 (arXiv 2504.19413 §2.1) — fact extraction + ADD/UPDATE/DELETE, dense retrieval
-      - "oracle"    : retrieval-ceiling upper bound (perfect retrieval + routing)
+    Supported:
+      - "groupchat_mem" : the proposed method (dual-view relational memory R + raw session repository S).
+      - "simple_rag"    : Simple RAG / Direct QA reference baselines (BM25 or embedding retrieval; no-history).
+      - "a_mem"         : A-MEM — interlinked memory notes with dynamic linking/evolution.
+      - "hipporag2"     : HippoRAG 2 — OpenIE knowledge graph + Personalized PageRank retrieval.
+      - "mem0"          : Mem0 — fact extraction + add/update/delete consolidation, dense retrieval.
+      - "oracle"        : oracle upper bound (perfect retrieval + routing).
     """
     name = name.lower()
-    if name == "tkg_hybrid":
-        from .tkg_hybrid import TKGHybridMemory
-        return TKGHybridMemory(llm=llm, embedder=embedder, cfg=cfg)
-    # baseline memory methods (implemented from papers + official repos)
+    if name in ("groupchat_mem", "groupchat-mem", "groupchatmem"):
+        from .groupchat_mem import GroupChatMem
+        return GroupChatMem(llm=llm, embedder=embedder, cfg=cfg)
+    if name in ("simple_rag", "simple-rag", "direct_qa", "direct-qa"):
+        from .simple_rag import SimpleRAGMemory
+        return SimpleRAGMemory(llm=llm, embedder=embedder, cfg=cfg)
     if name in ("a_mem", "a-mem", "amem"):
         from .a_mem import AMemMemory
         return AMemMemory(llm=llm, embedder=embedder, cfg=cfg)
@@ -36,15 +39,10 @@ def make_memory(name: str, llm: LLM, embedder: Embedder, cfg: dict[str, Any]) ->
     if name == "mem0":
         from .mem0 import Mem0Memory
         return Mem0Memory(llm=llm, embedder=embedder, cfg=cfg)
-    # mem0 B-side QA-only variant (retrieve/render/QA-prompt lens experiment). commit is identical to mem0 (snapshot reuse).
-    if name in ("mem0_bside", "mem0-bside"):
-        from .mem0_bside import Mem0BsideMemory
-        return Mem0BsideMemory(llm=llm, embedder=embedder, cfg=cfg)
-    # oracle — retrieval ceiling (perfect retrieval + routing). Inject the build_oracle bundle as retrieved context.
     if name == "oracle":
         from .oracle import OracleMemory
         return OracleMemory(llm=llm, embedder=embedder, cfg=cfg)
     raise ValueError(
-        f"Unknown memory: {name!r}. "
-        f"Currently supported: tkg_hybrid / a_mem / hipporag2 / mem0 / mem0_bside / oracle."
+        f"Unknown memory: {name!r}. Supported: "
+        f"groupchat_mem / simple_rag / a_mem / hipporag2 / mem0 / oracle."
     )

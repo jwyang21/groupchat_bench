@@ -17,14 +17,14 @@ embedder:
   model: text-embedding-3-small
 
 memory:
-  name: tkg_hybrid
-  context_size: 8000
+  name: groupchat_mem
+  context_size: 0                         # 0 = unlimited (top-k bounds retrieval)
   hop: 2
   bm25_first: true
-  rag_time_filter: true
-  quad_format: quad                       # 'quad' or 'sentence'
+  session_time_filter: false
+  record_format: record                   # 'record' or 'sentence'
   delimiter: "========================================"
-  num_q_subj_candidates: 3
+  num_query_nodes: 3
 
 eval:
   options: ["(A)", "(B)", "(C)", "(D)", "(E)"]

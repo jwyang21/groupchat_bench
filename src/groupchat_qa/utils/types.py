@@ -10,10 +10,11 @@ from typing import Any
 
 
 # ----------------------------------------------------------------------------
-# Quadruple — the basic unit of the TKG
+# Record — the basic unit of the relational memory R: [subject, relation, object]
+# time-indexed by its source session.
 # ----------------------------------------------------------------------------
 @dataclass(frozen=True)
-class Quad:
+class Record:
     head: str
     relation: str
     tail: str
@@ -29,7 +30,7 @@ class Quad:
 
 
 # ----------------------------------------------------------------------------
-# Session — one DialSim session (dialogue + metadata)
+# Session — one dialogue session (dialogue + metadata)
 # ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Session:
@@ -38,14 +39,14 @@ class Session:
     questioner: str                   # the character asking the question
     dialogue: str                     # the full session dialogue
     partial_dialogue: str             # dialogue up to just before the question
-    # TKG path kept symmetric to the RAG path — store entire/partial quads separately.
-    #   - entire_quadruples : quads extracted from the full session dialogue (accumulated into
-    #     KG(A) at commit). Symmetric to RAG's dialogue (entire) add.
-    #   - partial_quadruples: quads extracted from the dialogue up to just before the question
-    #     (used as the current session B at retrieval). Symmetric to RAG's partial_dialogue candidate add.
-    #   Both are tkg_hybrid-only (baselines a_mem/hipporag2/mem0 use only session.dialogue).
-    entire_quadruples: tuple[Quad, ...] | None = None
-    partial_quadruples: tuple[Quad, ...] | None = None
+    # Records for the relational memory R, kept symmetric to the raw session repository S.
+    #   - entire_records : records extracted from the full session dialogue (accumulated into
+    #     R at commit).
+    #   - partial_records: records extracted from the dialogue up to just before the question
+    #     (used as the current session's contribution at retrieval time).
+    #   Both are GroupChat-Mem-only (baselines a_mem/hipporag2/mem0 use only session.dialogue).
+    entire_records: tuple[Record, ...] | None = None
+    partial_records: tuple[Record, ...] | None = None
     # Precomputed dialogue embedding (injected by data_loader from entire_session_embedding.npy).
     # Avoids recomputation at commit() (e.g. 6304 calls -> 0 with 8 LLMs in parallel).
     # numpy arrays are unhashable, so exclude from the frozen dataclass's auto __hash__/__eq__.
@@ -68,14 +69,14 @@ class Question:
 
     # ------------------------------------------------------------------
     # Optional per-question artifacts. The `prebuilt_prompt_*` fields are unused by
-    # the live-retrieval pipeline (kept `None`); `q_clf_label` / `tkg_hop` feed the
+    # the live-retrieval pipeline (kept `None`); `route_label` / `hop_count` feed the
     # question-classifier routing when precomputed.
     # ------------------------------------------------------------------
-    prebuilt_prompt_rag: str | None = None         # optional prebuilt RAG QA prompt
-    prebuilt_prompt_tkg: str | None = None         # optional prebuilt TKG QA prompt
+    prebuilt_prompt_sessions: str | None = None    # optional prebuilt session-view QA prompt
+    prebuilt_prompt_records: str | None = None     # optional prebuilt record-view QA prompt
     prebuilt_prompt_no_history: str | None = None  # optional prebuilt no-history prompt
-    q_clf_label: str | None = None                 # 'RAG' / 'TKG' (question classifier)
-    tkg_hop: int | None = None                     # 1 / 2 / -1 (fanquiz)
+    route_label: str | None = None                 # optional precomputed retrieval route
+    hop_count: int | None = None                   # 1 / 2 / -1 (fanquiz) question hop count
 
 
 # ----------------------------------------------------------------------------
@@ -117,7 +118,7 @@ class RetrievalResult:
     items: list[Item] = field(default_factory=list)
     rendered: str = ""                # string inserted into the {triples} / {history} slot of the QA prompt
     metrics: CallMetrics = field(default_factory=CallMetrics)
-    extra: dict[str, Any] = field(default_factory=dict)  # baseline-specific (q_clf, q_subj, etc.)
+    extra: dict[str, Any] = field(default_factory=dict)  # baseline-specific (route, query nodes, etc.)
 
 
 # ----------------------------------------------------------------------------

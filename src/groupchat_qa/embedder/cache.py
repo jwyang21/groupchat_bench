@@ -2,8 +2,8 @@
 
 Two uses:
   1) precompute (`preprocess/v1_3_1/build_embeddings.py`):
-     run once and all (entire/partial dialogue + question + quad) are batch-embedded and stored.
-  2) ablation / baseline runtime (`memory/tkg_hybrid.py`, `CachedEmbedder`):
+     run once and all (entire/partial dialogue + question + record) are batch-embedded and stored.
+  2) experiment runtime (`memory/groupchat_mem.py`, `CachedEmbedder`):
      cache lookup → on miss, live embed → add the result to the cache + flush immediately.
      From the next cell/session within the same run, it is a cache hit.
 

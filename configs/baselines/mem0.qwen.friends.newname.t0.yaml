@@ -1,8 +1,8 @@
 # Example config: Mem0 baseline (arXiv 2504.19413). Friends, newname, trial 0, Qwen.
-# Two-phase commit then QA run via src/run/main.simulate.py (see A-MEM example header).
+# Two-phase commit then QA run via src/run/run_baseline.py (see A-MEM example header).
 
 data:
-  dataset_root: ./data/v1_3_1/friends
+  dataset_root: ./data/friends
   data_type: newname
   trial: 0
   ie_type: openie
@@ -18,7 +18,7 @@ llms:
   api_key: EMPTY
   temperature: 0.6
   top_p: 0.95
-  max_tokens: 16384
+  max_tokens: 8192
   system_prompt: You are a helpful assistant.
   extra_body:
     chat_template_kwargs:
@@ -31,13 +31,13 @@ embedder:
 memory:
   name: mem0
   top_s: 10
-  top_k: 1700
+  top_k: 600
   context_size: 8000
   question_format: multi_structured
   prompt_fact_extraction: mem0_fact_triple_extraction.txt
   prompt_update_decision: mem0_update_decision.txt
   prompt_qa: qa_mem0.txt
-  snapshot_dir: ./result/baseline_snapshots/v1_3_1_newname_t0
+  snapshot_dir: ./result/baseline_snapshots/newname_t0
   extract_cache: true
   session_checkpoint: true
   turns_per_batch: 5

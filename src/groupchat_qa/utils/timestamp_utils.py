@@ -28,7 +28,7 @@ _PATTERN_MDY_FULL = re.compile(rf"^{_MONTH} \d{{1,2}}, \d{{4}}$")
 _PATTERN_MY_FULL = re.compile(rf"^{_MONTH} \d{{4}}$")
 
 # Date range: "Month D - [Month] D, YYYY" (same-month + cross-month), with a single trailing
-# year (DialSim format). The connector is only hyphen/en-dash/em-dash — word connectors like
+# year. The connector is only hyphen/en-dash/em-dash — word connectors like
 # "to"/"and" are excluded because they risk false matches in question prose (and the data uses hyphens only).
 _RANGE_PAT = re.compile(
     rf"\b(?P<m1>{_MONTHS_ALT})\s+(?P<d1>\d{{1,2}})(?:st|nd|rd|th)?"

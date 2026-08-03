@@ -1,20 +1,16 @@
-"""main.simulate.py — researcher entry (v1.2.1 / v1.2.2 reproduction + v1.3.1 main experiment).
+"""run_baseline.py — baseline / oracle / simple-RAG / groupchat-mem entry point (commit + QA).
 
 Uses:
-  (1) v1.2.1 reproduction: raw pickle (`reproduce/data/.../trial{N}.pickle` etc.) — load_v1_2_1_trial.
-  (2) v1.2.2 reproduction: `config/main.simulate_v1_2.yaml`. For fairness, LLM/prompt/memory params
-      match the v1.2.1 run values in `reproduce/previous/src`. For verifying refactored-code integrity.
-  (3) v1.3.1 main experiment: `config/main.simulate_v1_3_1.yaml`. New prompts + per-LLM precomputed
-      cache (assistant == QA model policy: both triples and q_clf are precomputed by the QA LLM).
+  - Baselines + oracle + simple_rag + groupchat_mem: `configs/baselines/<...>.yaml`.
+    Both the retrieval records and the retrieval route are precomputed by the QA LLM
+    (assistant == QA model policy).
 
 Common assumptions:
-  - Input: converted tree (`data/v1_2_2/friends/` or `data/v1_3_1/friends/`) or a v1.2.1 raw pickle.
-  - memory: `tkg_hybrid` (live retrieval).
-  - data_type (normal/newname/shuffled) + ie_type (openie/closedie/gt) are chosen by config in both
-    v1.2.2/v1.3.1 (sconf argv override supported).
-  - q_clf source:
-      * v1.2.2 (`per_llm_precomputed: false`): `gpt_4o_q_clf` in qa.json
-      * v1.3.1 (`per_llm_precomputed: true`) : per-llm/{llm_name}/q_clf.json
+  - Input: converted dataset tree (`data/.../<dataset>/`).
+  - memory: chosen by config via the make_memory factory (live retrieval).
+  - data_type (normal/newname/shuffled) + ie_type (openie/closedie/gt) are chosen by config
+    (sconf argv override supported).
+  - route source (`per_llm_precomputed: true`): per-llm/{llm_name} cache.
   - vLLM endpoint: cfg.llms[i].host / cfg.llms[i].port (one entry per model).
     base_url auto-composed as `http://{host}:{port}/v1` (host default = localhost). base_url may also
     be set directly.
@@ -22,6 +18,9 @@ Common assumptions:
 Multi-LLM sweep: run each model in cfg.llms in parallel. On each thread's completion, save
 `<out>.{llm}.pkl` (preserve intermediate results). Before starting, ping every vLLM endpoint's
 `/health` to fail fast.
+
+Example:
+  python src/run/run_baseline.py --config configs/baselines/<...>.yaml
 """
 from __future__ import annotations
 
@@ -46,7 +45,7 @@ from groupchat_qa.assets import CONFIG_DIR
 from groupchat_qa.client import make_llm
 from groupchat_qa.embedder import CachedEmbedder, make_embedder
 from groupchat_qa.memory import make_memory
-from groupchat_qa.pipeline.data_loader import load_converted_dataset, load_q_subj_for, load_v1_2_1_trial
+from groupchat_qa.pipeline.data_loader import load_converted_dataset, load_query_nodes_for, load_v1_2_1_trial
 from groupchat_qa.utils import process_answer, save_pickle, load_pickle, seed_everything, load_project_env
 from groupchat_qa.utils.answer_match import match_option
 
@@ -86,7 +85,7 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
     """Return a copy of llm_cfg with the answer budget (= reasoning budget for the final QA
     inference) injected.
 
-    Ported verbatim from main.ablation.py's `_apply_answer_budget` (same behavior). The answer
+    Ported verbatim from the grid entry's `_apply_answer_budget` (same behavior). The answer
     budget is the reasoning limit at answer-generation time, independent of the cache budget
     (which cache to load).
 
@@ -250,24 +249,24 @@ def _check_vllm_endpoint(llm_cfg: dict, timeout: float = 30.0) -> None:
         logging.warning(f"LLM {name}: /v1/models query failed ({e}) — skipping model_name validation.")
 
 
-def _accuracy_by_tkg_hop(records: list[dict]) -> dict[str, float]:
-    """Accuracy aggregated by tkg_hop.
+def _accuracy_by_hop(records: list[dict]) -> dict[str, float]:
+    """Accuracy aggregated by hop_count.
 
-    tkg_hop convention (the `tkg_hop` field in qa.json, shared by v1.2.2/v1.3.1):
-       -1 : fanquiz  (fan-knowledge / non-TKG question)
-        1 : tkg1     (1-hop reasoning over KG)
-        2 : tkg2     (2-hop reasoning over KG)
-    v1.3.1 data must follow this convention for accurate bucket classification.
+    hop_count convention (the `hop_count` field in qa.json):
+       -1 : fanquiz  (fan-knowledge / non-relational question)
+        1 : hop1     (1-hop reasoning over the relational memory)
+        2 : hop2     (2-hop reasoning over the relational memory)
+    Data must follow this convention for accurate bucket classification.
     """
     buckets: dict[int, list[bool]] = {}
     for r in records:
         if r.get("is_correct") is None:
             continue
-        hop = r.get("tkg_hop")
+        hop = r.get("hop_count")
         if hop is None:
             continue
         buckets.setdefault(hop, []).append(bool(r["is_correct"]))
-    label_map = {-1: "fanquiz", 1: "tkg1", 2: "tkg2"}
+    label_map = {-1: "fanquiz", 1: "hop1", 2: "hop2"}
     return {label_map.get(h, f"hop_{h}"): sum(v) / max(1, len(v)) for h, v in buckets.items()}
 
 
@@ -432,7 +431,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
       normally used together with snapshot_dir. Default False (existing behavior: commit+QA).
 
     result_json_path / save_every_sessions / resume — per-session incremental save + resume after
-      interruption (for oracle=main.simulate and seednode ablation=main.ablation):
+      interruption (for oracle=run_baseline and the grid entry=run_groupchat_mem):
       - result_json_path=None (default) -> incremental/resume disabled, 100% identical behavior
         (summary is accumulator-based, records = the result list). commit_only=True forces it off
         (commit-only has no records).
@@ -487,13 +486,10 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     #   behavior, swap is a no-op).
     _commit_llm = llm
     _answer_llm = answer_llm if answer_llm is not None else llm
-    # commit_name: the name used for commit artifact (snapshot/ckpt/extract) paths (name if unset).
-    #   Lets a variant like mem0_bside — "commit is identical to base (mem0), only retrieve/render
-    #   differ" — reuse base's snapshot (otherwise it looks for {mem0_bside}_ckpt/, fails to find it,
-    #   and rebuilds 788 sessions = hours wasted; set commit_name: mem0 in the config).
+    # _ckpt_name: the name used for commit artifact (snapshot/ckpt/extract) paths.
     #   Note: a_mem session_snapshot_dir (below), _session_ckpt_dir, snapshot_path, and the extract
     #   path all use this for consistency.
-    _ckpt_name = mem_cfg.get("commit_name") or mem_cfg["name"]
+    _ckpt_name = mem_cfg["name"]
     # a_mem loads session_{idx-1}.snapshot at retrieve time (uses the enhanced embedding + no future
     #   leakage). Inject that path (same rule as _session_ckpt_dir below) into cfg so the a_mem
     #   constructor reads it. Only when both session_checkpoint + snapshot_dir are set.
@@ -513,7 +509,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     #       by current_session_idx, so preloading the full memory is still point-accurate = same result
     #       as a live build).
     #     - not exists -> commit as usual, then save a snapshot at the end of the loop -> reused next run.
-    #   Unset (default) keeps existing behavior (live commit every run). Common to a_mem/mem0/hipporag2/tkg.
+    #   Unset (default) keeps existing behavior (live commit every run). Common to a_mem/mem0/hipporag2/groupchat_mem.
     #   Note: snapshot_dir must be unique per (dataset, trial, data_type, ie_type, config) — do not
     #      reuse another experiment's output, so the caller must separate paths per experiment.
     snapshot_path: Path | None = None
@@ -566,7 +562,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         )
 
     # a_mem's official generate_query_llm — precompute (cache) question keywords before QA.
-    #   No-op if use_query_keywords=False (default). Other baselines (mem0/hippo/tkg) lack this method
+    #   No-op if use_query_keywords=False (default). Other baselines (mem0/hippo/groupchat_mem) lack this method
     #   (hasattr branch). Keywords depend on question text, so no future leakage.
     if hasattr(memory, "precompute_query_keywords"):
         try:
@@ -676,7 +672,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
             "llm": llm_name,
             "n_sessions": len(recs), "n_scored": _ns, "n_correct": _nc,
             "accuracy": _nc / max(1, _ns),
-            "accuracy_by_tkg_hop": _accuracy_by_tkg_hop(recs),
+            "accuracy_by_hop": _accuracy_by_hop(recs),
             "total_llm_latency_sec": sum(float(r.get("latency_sec") or 0.0) for r in recs),
             "total_wall_sec": wall,
             "total_input_tokens": sum(int(r.get("input_tokens") or 0) for r in recs),
@@ -781,18 +777,19 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     # For post-hoc analysis: the final QA prompt + retrieval's rendered triple/history.
                     "final_qa_prompt": retrieval.extra.get("qa_final_prompt", ""),
                     "retrieval_rendered": retrieval.extra.get("qa_retrieval_rendered", ""),
-                    "is_correct": is_correct, "tkg_hop": q.tkg_hop, "q_clf_label": q.q_clf_label,
+                    "is_correct": is_correct, "hop_count": q.hop_count, "route_label": q.route_label,
                     "route": retrieval.extra.get("route"), "fallback_from": retrieval.extra.get("fallback_from"),
-                    "tkg_path_info": retrieval.extra.get("tkg_path_info"),
+                    "records_path_info": retrieval.extra.get("records_path_info"),
                     # retrieval recall: B (full retrieved set) / C (set included in the QA prompt) — per session.
-                    #   non-enhanced: retrieval_b/c (per route: RAG=dialogue{session_idx} / TKG=quad{h,r,t,sd}).
-                    #   enhanced: retrieval_b/c_{rag,tkg} (RAG-path=dialogue, TKG-path=quad separated).
+                    #   non-enhanced: retrieval_b/c (per route: session route=dialogue{session_idx} /
+                    #     record route=record{h,r,t,sd}).
+                    #   enhanced: retrieval_b/c_{sessions,records} (session-path=dialogue, record-path separated).
                     "retrieval_b": retrieval.extra.get("retrieval_b", []),
                     "retrieval_c": retrieval.extra.get("retrieval_c", []),
-                    "retrieval_b_rag": retrieval.extra.get("retrieval_b_rag", []),
-                    "retrieval_c_rag": retrieval.extra.get("retrieval_c_rag", []),
-                    "retrieval_b_tkg": retrieval.extra.get("retrieval_b_tkg", []),
-                    "retrieval_c_tkg": retrieval.extra.get("retrieval_c_tkg", []),
+                    "retrieval_b_sessions": retrieval.extra.get("retrieval_b_sessions", []),
+                    "retrieval_c_sessions": retrieval.extra.get("retrieval_c_sessions", []),
+                    "retrieval_b_records": retrieval.extra.get("retrieval_b_records", []),
+                    "retrieval_c_records": retrieval.extra.get("retrieval_c_records", []),
                     "latency_sec": metrics.latency_sec, "input_tokens": metrics.input_tokens,
                     "output_tokens": metrics.output_tokens, "num_llm_calls": metrics.num_llm_calls,
                 })
@@ -803,7 +800,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     f"[Session {s.idx} ({s.date})]\n\n"
                     f"- questioner: {q.questioner}\n\n"
                     f"- partial_dialogue:\n{s.partial_dialogue}\n\n"
-                    f"- q_clf: {retrieval.extra.get('route','?')}    "
+                    f"- route: {retrieval.extra.get('route','?')}    "
                     f"(fallback_from={retrieval.extra.get('fallback_from','None')})\n\n"
                     f"question: {q.text}\n\n"
                     f"options: {list(q.options)}\n\n"
@@ -815,7 +812,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     f"model_answer_parsed: {processed}\n\n"
                     f"true_answer: {q.true_answer}\n\n"
                     f"is_correct: {is_correct}\n\n"
-                    f"tkg_hop: {q.tkg_hop}\n\n"
+                    f"hop_count: {q.hop_count}\n\n"
                     f"elapsed_time: {metrics.latency_sec:.5f}\n\n"
                     f"input_tokens: {metrics.input_tokens}\n\n"
                     f"output_tokens: {metrics.output_tokens}\n\n"
@@ -874,7 +871,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         summary = {
             "llm": llm_name, "commit_only": True,
             "n_sessions": 0, "n_scored": 0, "n_correct": 0, "accuracy": 0.0,
-            "accuracy_by_tkg_hop": {},
+            "accuracy_by_hop": {},
             "total_llm_latency_sec": total_latency, "total_wall_sec": wall,
             "total_input_tokens": total_in, "total_output_tokens": total_out,
         }
@@ -968,7 +965,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         "llm": llm_name,
         "n_sessions": len(results), "n_scored": n_scored, "n_correct": n_correct,
         "accuracy": n_correct / max(1, n_scored),
-        "accuracy_by_tkg_hop": _accuracy_by_tkg_hop(results),
+        "accuracy_by_hop": _accuracy_by_hop(results),
         "total_llm_latency_sec": total_latency, "total_wall_sec": wall,
         "total_input_tokens": total_in, "total_output_tokens": total_out,
     }
@@ -1013,8 +1010,8 @@ def run(
     if commit_only is None:
         commit_only = bool((cfg_d.get("run") or {}).get("commit_only", False))
     # answer budget — reasoning limit at final-QA-answering time (independent of cache budget).
-    #   Unset -> None (single LLM, existing behavior). main.ablation reads method_cfg.qa.answer_budget;
-    #   simulate reads top-level cfg.qa.answer_budget.
+    #   Unset -> None (single LLM, existing behavior). The grid entry reads method_cfg.qa.answer_budget;
+    #   this entry reads top-level cfg.qa.answer_budget.
     _answer_budget = (cfg_d.get("qa") or {}).get("answer_budget")
 
     llms_list = _normalize_llms(cfg_d)
@@ -1034,7 +1031,7 @@ def run(
     embedder = make_embedder(backend=emb_cfg["backend"], model=emb_cfg["model"])
 
     data_cfg = dict(cfg_d["data"])
-    # v1.3.1+ assistant == QA policy — load the bundle per LLM.
+    # assistant == QA policy — load the bundle per LLM.
     per_llm_mode = bool(data_cfg.get("per_llm_precomputed", False))
 
     # File-backed embedding cache — if `embedder.cache: true`, wrap the base embedder in
@@ -1062,7 +1059,7 @@ def run(
     _data_format = data_cfg.get("format", "v1_2_2")  # "v1_2_1" | "v1_2_2" (default)
     if not per_llm_mode:
         if _data_format == "v1_2_1":
-            # v1.2.1 raw pickle loader — reproduce/data/{data_type}/{ie_type}/trial{N}.pickle
+            # legacy raw pickle loader — reproduce/data/{data_type}/{ie_type}/trial{N}.pickle
             shared_bundle = load_v1_2_1_trial(pickle_path=data_cfg["pickle_path"])
         else:
             shared_bundle = load_converted_dataset(
@@ -1074,7 +1071,7 @@ def run(
             )
 
     # deepcopy — a nested dict (cos_sim settings, etc.) shared across threads would race.
-    # Aligned with the deepcopy pattern in main.ablation.py (asymmetry fix).
+    # Aligned with the deepcopy pattern in the grid entry (asymmetry fix).
     mem_cfg_base = copy.deepcopy(cfg_d["memory"])
     # run: guard against a None value for the key.
     run_cfg = dict(cfg_d.get("run") or {})
@@ -1088,7 +1085,7 @@ def run(
         if "name" not in llm_cfg and "model_name" not in llm_cfg:
             raise KeyError(f"LLM cfg has neither name nor model_name: {llm_cfg!r}")
         llm_name = llm_cfg.get("name", llm_cfg["model_name"])
-        logging.info(f"[main.simulate] sweep LLM: {llm_name} ({_resolve_base_url(llm_cfg)})")
+        logging.info(f"[run_baseline] sweep LLM: {llm_name} ({_resolve_base_url(llm_cfg)})")
         # per-session incremental save + resume variables — computed outside try (before bundle load,
         #   so unaffected by exceptions and safely referenced in the save block below). Resume is
         #   active only on a normal launch (not explicit --rerun-missing, not commit_only); run_one_llm
@@ -1099,9 +1096,9 @@ def run(
         _use_resume = (_p is not None) and (not commit_only) and (_rr is None)
         _save_every = int(run_cfg.get("result_save_every", 1)) if _use_resume else 0
         # no_history = parametric answer with no retrieval/history (uses only question + no-history
-        #   prompt; no KG/retrieval/q_clf/q_subj at all). So per-llm quad/q_clf cache is unnecessary ->
-        #   load only the base dataset (sessions+questions) so models with incomplete quads (e.g., gemma
-        #   t1/t2) also run immediately. commit (KG build) is skipped in run_one_llm (_skip_commit below).
+        #   prompt; no KG/retrieval at all). So the per-llm record/route cache is unnecessary ->
+        #   load only the base dataset (sessions+questions) so models with incomplete records (e.g.,
+        #   gemma t1/t2) also run immediately. commit (KG build) is skipped in run_one_llm (_skip_commit below).
         _no_history = bool(mem_cfg_base.get("no_history"))
         try:
             if per_llm_mode and not _no_history:
@@ -1117,14 +1114,14 @@ def run(
                     ie_type=data_cfg.get("ie_type", "openie"),
                     normalization=data_cfg.get("normalization", "raw"),
                     per_llm_name=llm_name,
-                    # Pass cache_budget — in sync with main.ablation. If omitted, per-llm q_clf/quad
-                    #   would load from top-level (non-budget) and ignore the b06000 cache -> crash when
-                    #   q_clf is absent. None keeps existing behavior.
+                    # Pass cache_budget — in sync with the grid entry. If omitted, the per-llm
+                    #   record/route cache would load from top-level (non-budget) and ignore the b06000
+                    #   cache. None keeps existing behavior.
                     cache_budget=mem_cfg_base.get("cache_budget"),
                 )
             elif per_llm_mode and _no_history:
-                # no_history -> do not load per-llm quad/q_clf (load base). Since answer uses only the
-                #   no-history prompt, the result is identical even without quads (result-preserving).
+                # no_history -> do not load the per-llm record/route cache (load base). Since answer uses
+                #   only the no-history prompt, the result is identical even without records (result-preserving).
                 bundle = load_converted_dataset(
                     dataset_root=data_cfg["dataset_root"],
                     data_type=data_cfg.get("data_type", "normal"),
@@ -1136,15 +1133,12 @@ def run(
                 bundle = shared_bundle
             sessions = bundle["sessions"]
             questions = bundle["questions"]
-            precomputed_q_clf = {
-                i: q.q_clf_label for i, q in enumerate(questions) if q is not None and q.q_clf_label
-            }
             # deepcopy — a nested dict mutation (e.g., cos_sim_rerank settings) shared across threads
-            # would race. Same policy as main.ablation.py.
+            # would race. Same policy as the grid entry.
             mem_cfg = copy.deepcopy(mem_cfg_base)
-            # Auto-inject the keys tkg_hybrid's _init_embedding_caches expects (previously not injected,
-            # so all caches were disabled and simulate.py embedded live every time).
-            # Same pattern as main.ablation.py.
+            # Auto-inject the keys the memory's _init_embedding_caches expects (previously not injected,
+            # so all caches were disabled and the entry embedded live every time).
+            # Same pattern as the grid entry.
             _trial_idx = int(data_cfg.get("trial", 0))
             mem_cfg["dataset_root"] = data_cfg.get("dataset_root")
             mem_cfg["data_type"] = data_cfg.get("data_type", "normal")
@@ -1166,48 +1160,47 @@ def run(
             # so None also becomes the default (prevents silent miss).
             _embedder_model = (cfg_d.get("embedder") or {}).get("model") or "text-embedding-3-small"
             mem_cfg["embedder_model"] = _embedder_model
-            if precomputed_q_clf:
-                mem_cfg["precomputed_q_clf"] = precomputed_q_clf
-            # Inject precomputed q_subj (per_llm mode, same pattern as main.ablation).
-            #   key = session_idx (= current_session_idx). If present, skip the q_subj LLM call on the
-            #   tkg path.
-            # precomputed q_subj — load the per-K nq{K} cache (K = num_q_subj_candidates), same convention
-            #   as ablation. Fallback: nq{K} absent -> q_subj_{norm}.json -> bundle["q_subj"] -> {} (live extraction).
-            _K = mem_cfg.get("num_q_subj_candidates")
+            # Inject precomputed query nodes (per_llm mode, same pattern as the grid entry).
+            #   key = session_idx (= current_session_idx). If present, skip the query-node LLM call on the
+            #   record route.
+            # precomputed query nodes — load the per-K nq{K} cache (K = num_query_nodes), same convention
+            #   as the grid entry. Fallback: nq{K} absent -> query_node_{norm}.json ->
+            #   bundle["query_nodes"] -> {} (live extraction).
+            _K = mem_cfg.get("num_query_nodes")
             _K = int(_K) if _K is not None else None
-            _q_subj = load_q_subj_for(
+            _query_nodes = load_query_nodes_for(
                 dataset_root=data_cfg.get("dataset_root"),
                 data_type=data_cfg.get("data_type", "normal"),
                 trial_idx=int(data_cfg.get("trial", 0)),
                 llm_name=llm_name,
                 normalization=data_cfg.get("normalization", "raw"),
                 cache_budget=mem_cfg.get("cache_budget"),
-                num_q_subj_candidates=_K,
-            ) or (bundle.get("q_subj") or {})
-            if _q_subj:
-                mem_cfg["precomputed_q_subj"] = {int(k): v for k, v in _q_subj.items()}
-            # Inject quad embeddings (for tkg_hybrid's cos_sim re-rank).
-            # Prefer partial (experiments use the partial KG), fall back to entire.
-            # tkg_hybrid's _quad_emb_map is read-only (`.get(key)` only, no mutate). So sharing the same
-            # dict from shared_bundle as mem_cfg["quad_embeddings"] across all threads (by reference)
+                num_query_nodes=_K,
+            ) or (bundle.get("query_nodes") or {})
+            if _query_nodes:
+                mem_cfg["precomputed_query_nodes"] = {int(k): v for k, v in _query_nodes.items()}
+            # Inject record embeddings (for the memory's cos_sim re-rank).
+            # Prefer partial (experiments use the partial memory), fall back to entire.
+            # The memory's record-embedding map is read-only (`.get(key)` only, no mutate). So sharing the
+            # same dict from shared_bundle as mem_cfg["record_embeddings"] across all threads (by reference)
             # does not race. If a mutation is added later, deepcopy or an RLock would be needed.
-            _quad_emb = bundle.get("partial_quad_emb") or bundle.get("entire_quad_emb")
-            if _quad_emb:
-                mem_cfg["quad_embeddings"] = _quad_emb
+            _record_emb = bundle.get("partial_record_emb") or bundle.get("entire_record_emb")
+            if _record_emb:
+                mem_cfg["record_embeddings"] = _record_emb
             # shared_bundle trial mismatch check.
-            # In v1_2_2 non-per-LLM mode, shared_bundle is loaded at module level for one trial.
-            # If mem_cfg["trial"] overrides to a different trial, quad_emb would be the wrong trial's ->
+            # In non-per-LLM mode, shared_bundle is loaded at module level for one trial.
+            # If mem_cfg["trial"] overrides to a different trial, record_emb would be the wrong trial's ->
             # a silent, wrong cos_sim.
             # ERROR level + raise to prevent a silent wrong-metric comparison (policy: a small difference
             # invalidates the metric).
-            if (not per_llm_mode) and _quad_emb:
+            if (not per_llm_mode) and _record_emb:
                 _bundle_trial = bundle.get("trial_idx")
                 if _bundle_trial is not None and _bundle_trial != _trial_idx:
                     _msg = (
-                        f"[main.simulate] shared_bundle trial mismatch — bundle.trial={_bundle_trial} vs mem_cfg.trial={_trial_idx}. "
+                        f"[run_baseline] shared_bundle trial mismatch — bundle.trial={_bundle_trial} vs mem_cfg.trial={_trial_idx}. "
                         f"In non-per-LLM mode the module-level shared_bundle is loaded for a single trial only. "
-                        f"cos_sim_rerank's quad_emb may be the wrong trial. "
-                        f"If you need per-trial-accurate quad_emb, use per_llm_precomputed=true or launch a single-trial run."
+                        f"cos_sim_rerank's record_emb may be the wrong trial. "
+                        f"If you need per-trial-accurate record_emb, use per_llm_precomputed=true or launch a single-trial run."
                     )
                     logging.error(_msg)
                     raise ValueError(_msg)
@@ -1239,9 +1232,9 @@ def run(
         except Exception as e:
             # Catch so one LLM thread's failure does not affect others — return an empty result.
             # A partial failure is an inconvenience; proceed automatically.
-            logging.error(f"[main.simulate] [{llm_name}] thread failed: {type(e).__name__}: {e}", exc_info=True)
+            logging.error(f"[run_baseline] [{llm_name}] thread failed: {type(e).__name__}: {e}", exc_info=True)
             out = {"summary": {"llm": llm_name, "n_sessions": 0, "n_scored": 0, "n_correct": 0,
-                               "accuracy": 0.0, "accuracy_by_tkg_hop": {},
+                               "accuracy": 0.0, "accuracy_by_hop": {},
                                "total_llm_latency_sec": 0.0, "total_wall_sec": 0.0,
                                "total_input_tokens": 0, "total_output_tokens": 0,
                                "error": f"{type(e).__name__}: {e}"},
@@ -1266,26 +1259,26 @@ def run(
                     _sm["n_scored"] = sum(1 for r in _recs if r.get("is_correct") is not None)
                     _sm["n_correct"] = sum(1 for r in _recs if r.get("is_correct"))
                     _sm["accuracy"] = (_sm["n_correct"] / _sm["n_scored"]) if _sm["n_scored"] else 0.0
-                    _sm["accuracy_by_tkg_hop"] = _accuracy_by_tkg_hop(_recs)
+                    _sm["accuracy_by_hop"] = _accuracy_by_hop(_recs)
                     _sm["total_input_tokens"] = sum(int(r.get("input_tokens") or 0) for r in _recs)
                     _sm["total_output_tokens"] = sum(int(r.get("output_tokens") or 0) for r in _recs)
                     _sm["total_llm_latency_sec"] = sum(float(r.get("latency_sec") or 0.0) for r in _recs)
                     _atomic_write_json(_p, _ex)
-                    logging.info(f"[main.simulate rerun] patched {len(_new)}/{len(_rr)} sessions -> {_p}")
+                    logging.info(f"[run_baseline rerun] patched {len(_new)}/{len(_rr)} sessions -> {_p}")
                 elif _use_resume:
                     # resume path: run_one_llm already owns and atomic-saved _p (incremental + final).
                     #   A duplicate (non-atomic) caller write risks truncation/overwrite, so skip it —
                     #   but on thread error, preserve the disk partial (out may be an empty-records error).
-                    logging.info(f"[main.simulate] resume-owned result saved (run_one_llm): {llm_name} -> {_p}")
+                    logging.info(f"[run_baseline] resume-owned result saved (run_one_llm): {llm_name} -> {_p}")
                 elif not out.get("summary", {}).get("error"):
                     # non-resume path (e.g., commit_only) — save out (atomic). On thread error, skip to preserve disk.
                     _atomic_write_json(_p, out)
-                    logging.info(f"[main.simulate] partial save: {llm_name} -> {_p}")
+                    logging.info(f"[run_baseline] partial save: {llm_name} -> {_p}")
                 else:
                     logging.warning(
-                        f"[main.simulate] {llm_name} thread error — preserving existing result (skip overwrite): {_p}")
+                        f"[run_baseline] {llm_name} thread error — preserving existing result (skip overwrite): {_p}")
             except Exception as e:
-                logging.warning(f"[main.simulate] partial save failed ({llm_name}): {e}")
+                logging.warning(f"[run_baseline] partial save failed ({llm_name}): {e}")
         return llm_name, out
 
     outputs: dict[str, dict[str, Any]] = {}
@@ -1308,7 +1301,7 @@ def run(
                     for f in futures:
                         f.cancel()
                     logging.error(
-                        "[main.simulate] LLM thread failed — unstarted futures canceled. "
+                        "[run_baseline] LLM thread failed — unstarted futures canceled. "
                         "Background running threads continue to completion (Python limitation). "
                         "Partial results are preserved at the save_per_llm path."
                     )
@@ -1325,7 +1318,7 @@ def run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="v1.2.1 / v1.2.2 / v1.3.1 simulate entry (multi-LLM sweep, parallel).")
+    parser = argparse.ArgumentParser(description="baseline entry (multi-LLM sweep, parallel).")
     parser.add_argument("--config", required=True, type=str)
     parser.add_argument("--out", type=Path, default=Path("./result/simulate_result.json"),
                         help="result base path. Each LLM's result is saved separately as "
@@ -1393,7 +1386,7 @@ def main() -> None:
         if not out.get("summary", {}).get("error"):
             _atomic_write_json(p, out)
         else:
-            logging.warning(f"[main.simulate] {llm_name} thread error — preserving existing result (skip final re-save): {p}")
+            logging.warning(f"[run_baseline] {llm_name} thread error — preserving existing result (skip final re-save): {p}")
         print(f"=== {llm_name} -> {p} ===")
         print(json.dumps(out["summary"], indent=2, ensure_ascii=False))
 

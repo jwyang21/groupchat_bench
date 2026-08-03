@@ -1,8 +1,8 @@
 # Example config: HippoRAG 2 baseline (arXiv 2502.14802). Friends, newname, trial 0, Qwen.
-# Two-phase commit then QA run via src/run/main.simulate.py (see A-MEM example header).
+# Two-phase commit then QA run via src/run/run_baseline.py (see A-MEM example header).
 
 data:
-  dataset_root: ./data/v1_3_1/friends
+  dataset_root: ./data/friends
   data_type: newname
   trial: 0
   ie_type: openie
@@ -17,7 +17,7 @@ llms:
   api_key: EMPTY
   temperature: 0.6
   top_p: 0.95
-  max_tokens: 16384
+  max_tokens: 8192
   system_prompt: You are a helpful assistant.
   extra_body:
     chat_template_kwargs:
@@ -42,7 +42,7 @@ memory:
   prompt_openie: hipporag2_openie.txt
   prompt_filter: hipporag2_filter.txt
   prompt_qa: hipporag2_qa.txt
-  snapshot_dir: ./result/baseline_snapshots/v1_3_1_newname_t0
+  snapshot_dir: ./result/baseline_snapshots/newname_t0
   extract_cache: true
   session_checkpoint: true
 run:

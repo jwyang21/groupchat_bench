@@ -106,8 +106,7 @@ def load_prompt(prompt_name: str, prompt_dir: str | Path | None = None) -> str:
 
     Args:
         prompt_name: with or without extension
-                     (e.g. "qa_quad.multi-unstructured.txt" or
-                      "qa.multi-structured.quad.v10").
+                     (e.g. "qa_records.multi-unstructured.txt" or "qa_dual").
         prompt_dir : if None, uses `groupchat_qa.assets.PROMPT_DIR` (the repo's
                      top-level `prompts/` directory).
     """

@@ -1,1 +1,1 @@
-"""Three entry points: main / main.simulate / main.ablation."""
+"""Entry points: run_baseline (baselines + oracle) / run_groupchat_mem (proposed method)."""

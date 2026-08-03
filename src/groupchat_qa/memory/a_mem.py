@@ -239,11 +239,13 @@ class AMemMemory(Memory):
         self._p_evolution = load_prompt(cfg.get("prompt_evolution", "a_mem_evolution.txt"))
         self._p_link = load_prompt(cfg.get("prompt_link", "a_mem_link_judge.txt"))
 
-        # QA prompt — default per question_format (same mapping rule as tkg_hybrid).
+        # QA prompt — default per question_format. A-MEM answers from the retrieved memory notes
+        #   embedded into the evidence slot, i.e. the same "answer strictly from the provided
+        #   evidence" template used by the Simple RAG baseline (qa_sessions.*).
         _FMT_QA_MAP = {
-            "multi_structured": "qa_rag.txt",
-            "multi_unstructured": "qa_rag.multi-unstructured.txt",
-            "open_ended": "qa_rag.open-ended.txt",
+            "multi_structured": "qa_sessions.txt",
+            "multi_unstructured": "qa_sessions.multi-unstructured.txt",
+            "open_ended": "qa_sessions.open-ended.txt",
         }
         _fmt_key = str(cfg.get("question_format", "multi_structured")).lower().replace("-", "_")
         _qa_default = _FMT_QA_MAP.get(_fmt_key, _FMT_QA_MAP["multi_structured"])
@@ -267,7 +269,7 @@ class AMemMemory(Memory):
         # Official generate_query_llm (test_advanced.py L67-87) — convert the question into search
         #   keywords and embed. Use a precompute cache instead of a per-QA-runtime LLM call: the
         #   keyword depends only on the question text (independent of memory/session/current_session_idx),
-        #   so precomputing all of them has no future leakage (same safety as the q_clf/q_subj cache).
+        #   so precomputing all of them has no future leakage (same safety as the routing/subject caches).
         #   cache path = session_snapshot_dir/query_keywords.json (per model, session-independent).
         self._use_query_keywords = bool(cfg.get("use_query_keywords", False))
         self._p_query_kw = load_prompt(
@@ -612,7 +614,7 @@ class AMemMemory(Memory):
         return apply_token_limit(prompt, self.context_size)
 
     # ====================================================================
-    # answer — retrieve → build prompt → generate (same contract as tkg_hybrid)
+    # answer — retrieve → build prompt → generate (same contract as GroupChat-Mem)
     # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
@@ -624,7 +626,7 @@ class AMemMemory(Memory):
         gen = self.llm.generate(prompt)
         metrics = result.metrics.merge(gen.to_metrics())
         # preserve the final QA generation's raw + reasoning + final prompt + retrieval rendering
-        # — used by main.simulate's record (same keys as tkg_hybrid).
+        # — used by run_baseline's record (same keys as GroupChat-Mem).
         result.extra["qa_raw_text"] = gen.text
         result.extra["qa_reasoning_text"] = getattr(gen, "reasoning_text", "")
         result.extra["qa_final_prompt"] = prompt
@@ -1091,7 +1093,7 @@ def _split_turns(dialogue: str) -> list[str]:
 def _format_note_chunk(note: MemoryNote, mem_idx: int) -> str:
     """Render one note (= a turns_per_note utterance batch) for the memory slot of the QA prompt.
 
-    Official A-MEM (memory_layer_robust.py L422) format = same as the memory example in qa_rag.amem.txt:
+    Official A-MEM (memory_layer_robust.py L422) format = same as the memory example in the A-MEM QA prompt:
       memory index / talk start time / memory content / memory context / memory keywords / memory tags.
     - memory index = the **global rank** at which this note (batch) was committed (_order/snapshot order
       position, cumulative across sessions — if the first session has 3 batches they are 0,1,2; the

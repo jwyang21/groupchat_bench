@@ -1,11 +1,11 @@
-"""main.ablation.py — hyperparameter grid sweep (multi-LLM x grid combo).
+"""run_groupchat_mem.py — grid / resume entry point for the proposed groupchat-mem method.
 
-The config's top-level key is the method name, selected via `--method <name>`.
-Each method section holds `llms` (list) + `grid` (dict of axis -> values). Every
-(LLM x grid combo) combination is executed.
+The config's top-level key is the method name, selected via `--method <name>` (use
+`groupchat_mem` for the clean configs). Each method section holds `llms` (list) +
+`grid` (dict of axis -> values). Every (LLM x grid combo) combination is executed.
 
-Core policy (v1_3+):
-- `data.per_llm_precomputed: true` -> use per-LLM cache (per-llm/{llm}/q_clf.json + {ie_type}/...).
+Core policy:
+- `data.per_llm_precomputed: true` -> use per-LLM cache (per-llm/{llm} route/record cache + {ie_type}/...).
   On cache miss, raise FileNotFoundError immediately (assistant == QA model policy).
 - `data.session_filter`: all / even / odd (0-based — even = idx 0,2,4,...).
 - `data.data_type`: normal / newname / shuffled. `data.ie_type`: openie / closedie / gt.
@@ -30,6 +30,9 @@ result_dir:
 - Otherwise composed dynamically as
   `./result/ablation/{method}/{dataset}.{data_type}.t{trial}.{ie_type}`,
   so re-running with a different dataset/data_type never overwrites.
+
+Example:
+  python src/run/run_groupchat_mem.py --config configs/groupchat_mem/<...>.yaml --method groupchat_mem --llms <model>
 """
 from __future__ import annotations
 
@@ -49,18 +52,18 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import importlib.util
-# Load the bridge-inverse variant of main.simulate (its make_memory uses factory_bridge_inverse)
-# instead of the plain module. The factory routes only tkg_hybrid_bridge_inverse to a new class
-# and delegates all other memory names to the original, so behavior is otherwise unchanged.
-_simulate_path = Path(__file__).with_name("main.simulate_bridge_inverse.py")
-_spec = importlib.util.spec_from_file_location("_main_simulate_bridge_inverse", _simulate_path)
-_main_simulate = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_main_simulate)
+# Load the baseline entry module (run_baseline.py) by file path and reuse its shared helpers
+# (run_one_llm, _make_llm_from_cfg, _check_vllm_endpoint, aggregation, atomic JSON save). The
+# memory factory routes the groupchat_mem name to its class and delegates other names unchanged.
+_baseline_path = Path(__file__).with_name("run_baseline.py")
+_spec = importlib.util.spec_from_file_location("_run_baseline", _baseline_path)
+_baseline = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_baseline)
 
 from sconf import Config
 
 from groupchat_qa.embedder import CachedEmbedder, make_embedder
-from groupchat_qa.pipeline.data_loader import load_converted_dataset, load_q_subj_for
+from groupchat_qa.pipeline.data_loader import load_converted_dataset, load_query_nodes_for
 from groupchat_qa.utils import save_pickle, seed_everything, load_project_env
 
 # Auto-discover .env (override=True: the .env's real key takes priority even if a launcher
@@ -88,8 +91,7 @@ def _apply_overrides(base_cfg: dict, overrides: dict, default_target: str = "mem
     - otherwise (no dot) -> default_target.{key}  (backward compat — default "memory")
     """
     # Use copy.deepcopy: a json round-trip would coerce int keys -> str, tuple -> list, and
-    # silently lose non-JSON types (Path, datetime, set). Safe even if a dict like
-    # precomputed_q_clf later becomes nested.
+    # silently lose non-JSON types (Path, datetime, set). Safe even if a nested dict value is present.
     out = copy.deepcopy(base_cfg)
     # Guard against a typo creating an unknown section (silent fail) — whitelist known sections.
     _KNOWN_SECTIONS = {"run", "data", "memory", "embedder", "llms"}
@@ -264,19 +266,17 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
 
     Args:
         method_cfg: config values set in the yaml for the current method (overridden by CLI).
-        method_name: name of the current method (here the retrieval method name: tkg_hybrid).
+        method_name: name of the current method (here the proposed method name: groupchat_mem).
         llm_names: list of LLM names to use in the ablation.
 
     Returns:
         Summarized result
     """
-    # Options to test per ablation axis (e.g., tkg_type: ['openie', 'closedie', 'gt'], no_history = [True, False]).
+    # Options to sweep, one axis per config key (e.g. hyperparameters such as num_records / num_sessions).
     grid = method_cfg.get("grid", {})
     # Non-rectangular grid support: if grid_combos is present, use that explicit combo list as-is
-    #   (bypassing the cartesian product). Use it to specify exactly non-rectangular combinations —
-    #   e.g., retrieval_method x rag_method = tkg_only (no rag) + rag_only/tkg_rag/enhanced x
-    #   (emb_only/bm25_only/alternating) = 10 combos. Each combo is a dict whose keys are
-    #   _apply_overrides dotted paths.
+    #   (bypassing the cartesian product). Use it to specify exactly the combinations to run.
+    #   Each combo is a dict whose keys are _apply_overrides dotted paths.
     explicit_combos = method_cfg.get("grid_combos")
     if explicit_combos is not None:
         if not isinstance(explicit_combos, list) or not all(isinstance(c, dict) for c in explicit_combos):
@@ -357,7 +357,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
     # Sequential calls incur N LLM x timeout of cold start; a parallel ping shortens it.
     logging.info(f"[ablation] vLLM endpoint ping (num LLMs={len(llms_list)})")
     with ThreadPoolExecutor(max_workers=max(1, min(len(llms_list), 16))) as _hc_pool:
-        _hc_futures = [_hc_pool.submit(_main_simulate._check_vllm_endpoint, c) for c in llms_list]
+        _hc_futures = [_hc_pool.submit(_baseline._check_vllm_endpoint, c) for c in llms_list]
         for _f in as_completed(_hc_futures):
             _f.result()   # propagate exceptions
 
@@ -457,7 +457,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
         # run.seed (client created once outside the grid loop — run.seed is not a grid axis here).
         # Inject the answer budget (original if unset) — changes only the answer-gen reasoning limit.
         _llm_cfg_eff = _apply_answer_budget(llm_cfg, _answer_budget)
-        llm = _main_simulate._make_llm_from_cfg(_llm_cfg_eff, seed=int(base.get("run", {}).get("seed", 42)))
+        llm = _baseline._make_llm_from_cfg(_llm_cfg_eff, seed=int(base.get("run", {}).get("seed", 42)))
 
         for grid_idx, combo in enumerate(combos):
             # Grid range split — process half the grids per proc for slow models to raise endpoint
@@ -590,18 +590,15 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 # cache_budget — which reasoning budget the cache was extracted with (independent of
                 #   the answer budget = llm_cfg.extra_body.thinking_token_budget).
                 _cache_budget = _cache_budget_of(cfg_run)
-                # no_history combo -> per-llm quad/q_clf cache is unnecessary (answer uses only the
-                #   no-history prompt). Load the base bundle (per_llm_name=None) so models with
-                #   incomplete quads also run. commit (KG build) is auto-skipped via run_one_llm's
+                # no_history combo -> the per-llm record/route cache is unnecessary (answer uses only
+                #   the no-history prompt). Load the base bundle (per_llm_name=None) so models with
+                #   incomplete records also run. commit (KG build) is auto-skipped via run_one_llm's
                 #   _skip_commit (kept in sync).
                 _no_hist = bool((cfg_run.get("memory") or {}).get("no_history"))
                 _bundle_per_llm = None if _no_hist else (llm_name if per_llm_mode else None)
                 bundle = _get_bundle(cfg_data, _bundle_per_llm, _cache_budget)
                 sessions = bundle["sessions"]
                 questions = bundle["questions"]
-                precomputed_q_clf = {
-                    i: q.q_clf_label for i, q in enumerate(questions) if q is not None and q.q_clf_label
-                }
 
                 # Read sess_filter from cfg_data inside the loop (it may be a grid axis).
                 run_cfg = dict(cfg_run.get("run", {}))
@@ -616,7 +613,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
 
                 # Rebuild mem_cfg (hop/context_size etc. vary per grid).
                 mem_cfg = dict(cfg_run["memory"])
-                # For auto-composing the tkg_hybrid EmbeddingCache path.
+                # For auto-composing the memory EmbeddingCache path.
                 # Needs dataset_root / data_type / trial / llm_name / ie_type / normalization.
                 mem_cfg["dataset_root"] = cfg_data.get("dataset_root")
                 mem_cfg["data_type"] = cfg_data.get("data_type", "normal")
@@ -625,44 +622,41 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 mem_cfg["ie_type"] = cfg_data.get("ie_type", "openie")
                 mem_cfg["normalization"] = cfg_data.get("normalization", "raw")
                 mem_cfg["embedder_model"] = method_cfg["embedder"]["model"]
-                # Pass so the quad embedding cache is also read from the same budget segment
+                # Pass so the record embedding cache is also read from the same budget segment
                 #   (mem_cfg["cache_budget"] is already present from cfg_run["memory"] — copied via
                 #    dict(cfg_run["memory"]) so re-injection is not required, but unify with _cache_budget).
                 mem_cfg["cache_budget"] = _cache_budget
-                if precomputed_q_clf:
-                    # Defensive shallow copy — avoids bundle pollution on later mutation.
-                    mem_cfg["precomputed_q_clf"] = dict(precomputed_q_clf)
-                # Inject precomputed q_subj (produced by precompute_q_subj.py, per_llm mode).
-                #   key = session_idx (= current_session_idx). If present, skip the q_subj LLM call on
-                #   the tkg path (same pattern as q_clf).
-                # precomputed q_subj — load the per-grid nq{K} cache (K = num_q_subj_candidates).
-                #   bundle["q_subj"] is loaded once per (llm, trial) and is K-independent (default file),
-                #   so when the grid varies num_q_subj over 1/3/5/7/9, each must read its own
-                #   q_subj_{norm}_nq{K}.json for the seed node count to actually change.
-                #   Fallback: nq{K} absent -> q_subj_{norm}.json -> bundle["q_subj"] -> {} (live extraction).
-                _K = mem_cfg.get("num_q_subj_candidates")
+                # Inject precomputed query nodes (produced by the query-node precompute step, per_llm mode).
+                #   key = session_idx (= current_session_idx). If present, skip the query-node LLM call on
+                #   the record route.
+                # precomputed query nodes — load the per-grid nq{K} cache (K = num_query_nodes).
+                #   bundle["query_nodes"] is loaded once per (llm, trial) and is K-independent (default file),
+                #   so when the grid varies num_query_nodes over 1/3/5/7/9, each must read its own
+                #   query_node_{norm}_nq{K}.json for the query-node count to actually change.
+                #   Fallback: nq{K} absent -> query_node_{norm}.json -> bundle["query_nodes"] -> {} (live extraction).
+                _K = mem_cfg.get("num_query_nodes")
                 _K = int(_K) if _K is not None else None
-                _q_subj = load_q_subj_for(
+                _query_nodes = load_query_nodes_for(
                     dataset_root=cfg_data.get("dataset_root"),
                     data_type=cfg_data.get("data_type", "normal"),
                     trial_idx=int(cfg_data.get("trial", 0)),
                     llm_name=llm_name,
                     normalization=cfg_data.get("normalization", "raw"),
                     cache_budget=_cache_budget,
-                    num_q_subj_candidates=_K,
-                ) or (bundle.get("q_subj") or {})
-                if _q_subj:
-                    mem_cfg["precomputed_q_subj"] = {int(k): v for k, v in _q_subj.items()}
-                # Inject quad embeddings (for tkg_hybrid's cos_sim re-rank).
-                # Prefer partial (experiments use the partial KG), fall back to entire.
-                # A prior `_quad_emb = None` (temporarily disabled due to an underscore-key mismatch)
+                    num_query_nodes=_K,
+                ) or (bundle.get("query_nodes") or {})
+                if _query_nodes:
+                    mem_cfg["precomputed_query_nodes"] = {int(k): v for k, v in _query_nodes.items()}
+                # Inject record embeddings (for the memory's cos_sim re-rank).
+                # Prefer partial (experiments use the partial memory), fall back to entire.
+                # A prior `_record_emb = None` (temporarily disabled due to an underscore-key mismatch)
                 # silently no-op'd the cos_sim_rerank=True grid axis -> ON/OFF gave identical results.
-                # EmbeddingCache's v1.3.1 keys are unified as `f"{h} {r} {t} on {sd}"` (temporal) +
-                # `f"{h} {r} {t}"` (non_temporal), and tkg_hybrid also uses the same key -> re-enabled.
+                # EmbeddingCache keys are unified as `f"{h} {r} {t} on {sd}"` (temporal) +
+                # `f"{h} {r} {t}"` (non_temporal), and the memory also uses the same key -> re-enabled.
                 # On in-memory map miss, the file cache + live embed fallback protects.
-                _quad_emb = bundle.get("partial_quad_emb") or bundle.get("entire_quad_emb")
-                if _quad_emb:
-                    mem_cfg["quad_embeddings"] = _quad_emb
+                _record_emb = bundle.get("partial_record_emb") or bundle.get("entire_record_emb")
+                if _record_emb:
+                    mem_cfg["record_embeddings"] = _record_emb
 
                 logging.info(f"[ablation] {method_name} {cur}/{total} llm={llm_name} grid={grid_idx} combo={combo}")
                 # Add PID to the ckpt name — avoids ckpt collisions across concurrent sweep runs.
@@ -677,7 +671,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 #   (theoffice ~450MB) every session, do it every 10 (10x fewer writes). On crash only
                 #   <=10 sessions are reprocessed on resume.
                 _abl_save_every = int(run_cfg.get("result_save_every", 10))
-                run_out = _main_simulate.run_one_llm(
+                run_out = _baseline.run_one_llm(
                     llm, llm_name, embedder, sessions, questions, mem_cfg, run_cfg,
                     checkpoint_path=ckpt_path, checkpoint_every=100,
                     rerun_sessions=_rerun_targets,   # rerun_missing mode answers only missing sessions, else None
@@ -733,7 +727,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     _ex["summary"]["n_scored"] = _ns
                     _ex["summary"]["n_correct"] = _nc
                     _ex["summary"]["accuracy"] = _nc / max(1, _ns)
-                    _ex["summary"]["accuracy_by_tkg_hop"] = _main_simulate._accuracy_by_tkg_hop(_recs)
+                    _ex["summary"]["accuracy_by_hop"] = _baseline._accuracy_by_hop(_recs)
                     _ex["summary"]["total_input_tokens"] = sum(int(r.get("input_tokens", 0) or 0) for r in _recs)
                     _ex["summary"]["total_output_tokens"] = sum(int(r.get("output_tokens", 0) or 0) for r in _recs)
                     _ex["summary"]["total_llm_latency_sec"] = sum(float(r.get("latency_sec", 0) or 0) for r in _recs)
@@ -745,7 +739,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     if isinstance(_ex.get("records"), list):
                         _ex["records"].sort(key=lambda _r: _r.get("session_idx", 0))
                     # Save (same format: ensure_ascii=False, indent=2, default=str). Atomic.
-                    _main_simulate._atomic_write_json(_result_file, _ex)
+                    _baseline._atomic_write_json(_result_file, _ex)
                     logging.info(f"[ablation rerun] grid={grid_idx} patched sessions {sorted(_new_by_idx)} "
                                  f"-> n_scored {_ns}, acc {_ex['summary']['accuracy']:.4f}")
                     continue
@@ -782,7 +776,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     #   of the array (scrambling order); restore order at final save (content unchanged).
                     if isinstance(run_out.get("records"), list):
                         run_out["records"].sort(key=lambda _r: _r.get("session_idx", 0))
-                    _main_simulate._atomic_write_json(
+                    _baseline._atomic_write_json(
                         out_dir / f"{llm_name}.grid_{grid_idx:03d}.json", run_out)
                 except Exception as _je:
                     logging.warning(f"[ablation] failed to save grid json (ignored): {type(_je).__name__}: {_je}")
@@ -869,7 +863,7 @@ def main() -> None:
         description="HP search entry: grid sweep for one method (multi-LLM parallel).",
     )
     parser.add_argument("--config", required=True, type=str)
-    parser.add_argument("--method", required=True, help="the config's top-level key (e.g., tkg_hybrid).")
+    parser.add_argument("--method", required=True, help="the config's top-level key (e.g., groupchat_mem).")
     parser.add_argument("--llms", type=str, default="",
                         help="comma-separated LLM names. If omitted, sweep all of method.llms.")
     parser.add_argument("--grid-start", type=int, default=0,
@@ -898,7 +892,7 @@ def main() -> None:
     if left_argv:
         # Take the remaining CLI args (flat string list) and overwrite yaml config values, descending
         # the yaml tree along the dot-path.
-        # e.g., ["--tkg_hybrid.data.trial", "1", "--tkg_hybrid.run.seed", "7"]
+        # e.g., ["--groupchat_mem.data.trial", "1", "--groupchat_mem.run.seed", "7"]
         cfg.argv_update(left_argv)
 
     # Convert the sconf object to a python dict.

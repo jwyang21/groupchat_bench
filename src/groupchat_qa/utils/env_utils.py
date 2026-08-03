@@ -5,7 +5,7 @@ Principles:
     first directory containing a .env (the groupchat_qa project root).
   - Never put secrets like OPENAI_API_KEY in yaml; inject them from .env instead.
 
-Usage (right after imports in main.py / main.simulate.py / main.ablation.py):
+Usage (right after imports in the run entry points):
     from groupchat_qa.utils import load_project_env
     load_project_env()  # sets OPENAI_API_KEY etc. as environment variables
 """

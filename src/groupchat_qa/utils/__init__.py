@@ -1,6 +1,6 @@
 """Utils — helpers and shared types imported across multiple files."""
 from .types import (
-    Quad,
+    Record,
     Session,
     Question,
     Item,
@@ -14,7 +14,7 @@ from .common_utils import (
     remove_brackets,
     get_clean_entity,
     process_answer,
-    is_valid_quad,
+    is_valid_record,
 )
 from .filesys_utils import (
     load_pickle,
@@ -37,10 +37,10 @@ from .env_utils import load_project_env, find_project_env
 #   from groupchat_qa.utils.reranker import BGEReranker
 
 __all__ = [
-    "Quad", "Session", "Question", "Item", "RetrievalResult",
+    "Record", "Session", "Question", "Item", "RetrievalResult",
     "CallMetrics", "GenerationRecord",
     "cos_sim", "remove_quotes", "remove_brackets", "get_clean_entity",
-    "process_answer", "is_valid_quad",
+    "process_answer", "is_valid_record",
     "load_pickle", "save_pickle", "load_yaml", "load_prompt", "local_first",
     "seed_everything",
     "apply_token_limit", "count_tokens", "trim_text_to_tokens",

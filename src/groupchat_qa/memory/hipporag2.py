@@ -55,7 +55,7 @@ from groupchat_qa.utils import (
     cos_sim,
     apply_token_limit,
     count_tokens,
-    is_valid_quad,
+    is_valid_record,
     load_pickle,
     load_prompt,
     remove_brackets,
@@ -187,9 +187,9 @@ def _passage_key(sess_idx: int) -> str:
 def _format_hippo_chunk(text: str, date: str, sess_idx: int) -> str:
     """Render a retrieved passage into a QA prompt {history} chunk — including a timestamp header.
 
-    The qa_rag.hipporag.txt EXAMPLE gives each History entry a timestamp
+    The hipporag2_qa.txt EXAMPLE gives each History entry a timestamp
     ([Date: ..., Session N]), so the actual rendering includes the timestamp too.
-    The format matches the system-wide convention (tkg_hybrid `_format_dialogue_chunk`):
+    The format matches the system-wide convention (GroupChat-Mem `_format_dialogue_chunk`):
     "[Date: {date} (Session {sess_idx})]" — unifying the history format the model sees.
     If date is empty, "[Date:  (Session N)]" would result, so only Session is shown.
     """
@@ -406,8 +406,8 @@ class HippoRAG2Memory(Memory):
             if len(tri) != 3:
                 continue
             s, p, o = (str(tri[0]).strip(), str(tri[1]).strip(), str(tri[2]).strip())
-            # drop lone pronouns / cyclic triples (same policy as tkg_hybrid).
-            if not is_valid_quad({"head": s, "tail": o}):
+            # drop lone pronouns / cyclic triples (same policy as GroupChat-Mem).
+            if not is_valid_record({"head": s, "tail": o}):
                 continue
             s_key = _register_phrase(s)
             o_key = _register_phrase(o)
@@ -1015,14 +1015,14 @@ class HippoRAG2Memory(Memory):
             date = self._store.passage_date.get(k) or ""
             sidx = self._store.passage_sess_idx.get(k, -1)
             # include a timestamp header before each hippo passage
-            #   ([Date: <date> (Session <idx>)]). The qa_rag.hipporag.txt EXAMPLE gives each
-            #   History a timestamp, so the actual rendering matches it. Same format as tkg_hybrid.
+            #   ([Date: <date> (Session <idx>)]). The hipporag2_qa.txt EXAMPLE gives each
+            #   History a timestamp, so the actual rendering matches it. Same format as GroupChat-Mem.
             chunk = _format_hippo_chunk(text, date, sidx)
             tk = count_tokens(chunk)
             if self.context_size > 0 and approx + tk > self.context_size:
                 # If the first (top-ranked) passage alone exceeds the limit, a plain break would
                 #   leave rendered="" -> the caller's `or "No relevant history!"` misroutes, so a
-                #   successful retrieval answers with an empty context (realistic since DialSim
+                #   successful retrieval answers with an empty context (realistic since the
                 #   entire_session is long). Always include at least one, trimmed to the remaining budget.
                 if not items:
                     budget = self.context_size - approx
@@ -1050,7 +1050,7 @@ class HippoRAG2Memory(Memory):
         return apply_token_limit(prompt, self.context_size)
 
     # ====================================================================
-    # answer — retrieve -> build prompt -> generate (same contract as tkg_hybrid)
+    # answer — retrieve -> build prompt -> generate (same contract as GroupChat-Mem)
     # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
@@ -1062,7 +1062,7 @@ class HippoRAG2Memory(Memory):
         gen = self.llm.generate(prompt)
         metrics = result.metrics.merge(gen.to_metrics())
         # preserve the final QA generation's raw + reasoning + final prompt + retrieval rendering
-        # — used by main.simulate's record (same keys as tkg_hybrid).
+        # — used by run_baseline's record (same keys as GroupChat-Mem).
         result.extra["qa_raw_text"] = gen.text
         result.extra["qa_reasoning_text"] = getattr(gen, "reasoning_text", "")
         result.extra["qa_final_prompt"] = prompt

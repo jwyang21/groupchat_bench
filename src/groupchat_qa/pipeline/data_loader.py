@@ -10,19 +10,19 @@ Converted tree structure (v1_3 is identical):
             precomputed/
                 common/{ie_type}/  # openie / closedie / gt
                     {llm_name}/[bNNNNN/]                  # budget-branch cache (optional)
-                        entire_session_quadruples_{en,raw}.json
-                        entire_session_quadruples_embedding_{en,raw}_{temporal,non_temporal}.pickle
+                        entire_session_records_{en,raw}.json
+                        entire_session_records_embedding_{en,raw}_{temporal,non_temporal}.pickle
                 per-trial/t{N}/
                     qa.json
                     partial_session.json
                     partial_session_embedding.npy          # budget-independent (text-embedding-3-small)
                     question_embeddings_{type}_cache.pickle # budget-independent
                     per-llm/{llm_name}/[bNNNNN/]          # v1_3 assistant==QA + budget branch (optional)
-                        q_clf.json                       # {idx: "RAG"|"TKG"} — per LLM, ie_type-independent
-                        q_subj.json                      # {idx: [candidate,...]} (optional)
+                        route.json                       # {idx: "RAG"|"R"} — per LLM, ie_type-independent
+                        query_node.json                  # {idx: [candidate,...]} (optional)
                         {ie_type}/                       # openie / closedie / gt
-                            partial_session_quadruples_{en,raw}.json
-                            partial_session_quadruples_embedding_{en,raw}_{type}.pickle
+                            partial_session_records_{en,raw}.json
+                            partial_session_records_embedding_{en,raw}_{type}.pickle
 
 cache budget branch (`bNNNNN` segment):
     Within the same dataset tree, extraction caches per budget (e.g. b06000/b08000/b10000) coexist.
@@ -40,7 +40,7 @@ import numpy as np
 
 from groupchat_qa.utils import (
     Question,
-    Quad,
+    Record,
     Session,
     load_pickle,
     local_first,  # read embeddings local-first (reduce NAS load)
@@ -50,7 +50,7 @@ from groupchat_qa.utils import (
 # ============================================================================
 # cache budget directory branch
 # ============================================================================
-# A directory segment so that extraction caches per budget (q_clf/q_subj/triple/quadruple + quad
+# A directory segment so that extraction caches per budget (route/query_node/triple/record + record
 # embeddings) can coexist within the same dataset tree. Instead of keeping a separate dataset_root
 # copy per budget, insert a single `bNNNNN` layer directly under the LLM folder of per-llm/common.
 #   - dialogue/question embeddings (text-embedding-3-small) are independent of the reasoning budget
@@ -86,34 +86,34 @@ def _apply_budget(base: Path, cache_budget: int | str | None) -> Path:
 
 
 # ============================================================================
-# q_subj cache — file separation per K (num_q_subj_candidates) (TKG seed node count)
+# query node cache — file separation per K (num_query_nodes)
 # ============================================================================
-def q_subj_filename(normalization: str, num_q_subj_candidates: int | None = None) -> str:
-    """q_subj cache file name. With K (num_q_subj_candidates), split by K with a `_nq{K}` suffix.
+def query_node_filename(normalization: str, num_query_nodes: int | None = None) -> str:
+    """query node cache file name. With K (num_query_nodes), split by K with a `_nq{K}` suffix.
 
-    None → original behavior (`q_subj_{norm}.json`). int → `q_subj_{norm}_nq{K}.json`.
-    Must be **exactly identical** to the save file name in precompute_q_subj.py (read/write paths in sync).
+    None → original behavior (`query_node_{norm}.json`). int → `query_node_{norm}_nq{K}.json`.
+    Must be **exactly identical** to the save file name in the query-node precompute step (read/write paths in sync).
     """
-    if num_q_subj_candidates is not None:
-        return f"q_subj_{normalization}_nq{int(num_q_subj_candidates)}.json"
-    return f"q_subj_{normalization}.json"
+    if num_query_nodes is not None:
+        return f"query_node_{normalization}_nq{int(num_query_nodes)}.json"
+    return f"query_node_{normalization}.json"
 
 
-def load_q_subj_cache(
-    base: Path | str, normalization: str, num_q_subj_candidates: int | None = None
+def load_query_node_cache(
+    base: Path | str, normalization: str, num_query_nodes: int | None = None
 ) -> dict[int, list]:
-    """Load the q_subj cache under per-llm base (with budget segment) → {int idx: [candidate,...]}.
+    """Load the query node cache under per-llm base (with budget segment) → {int idx: [candidate,...]}.
 
-    With K (num_q_subj_candidates), prefer `q_subj_{norm}_nq{K}.json` →
-    fall back to `q_subj_{norm}.json` if absent → {} if neither exists (runtime live extraction).
+    With K (num_query_nodes), prefer `query_node_{norm}_nq{K}.json` →
+    fall back to `query_node_{norm}.json` if absent → {} if neither exists (runtime live extraction).
     Parse failure / non-dict is handled safely by trying the next candidate or returning {}.
     """
     base = Path(base)
-    # With K given, prefer nq{K}, then always fall back to legacy (q_subj_{norm}.json).
+    # With K given, prefer nq{K}, then always fall back to legacy (query_node_{norm}.json).
     rel_names: list[str] = []
-    if num_q_subj_candidates is not None:
-        rel_names.append(q_subj_filename(normalization, num_q_subj_candidates))
-    rel_names.append(q_subj_filename(normalization, None))
+    if num_query_nodes is not None:
+        rel_names.append(query_node_filename(normalization, num_query_nodes))
+    rel_names.append(query_node_filename(normalization, None))
     for rel in rel_names:
         p = base / rel
         if not p.exists():
@@ -134,18 +134,18 @@ def load_q_subj_cache(
     return {}
 
 
-def load_q_subj_for(
+def load_query_nodes_for(
     dataset_root: Path | str,
     data_type: str,
     trial_idx: int,
     llm_name: str,
     normalization: str = "raw",
     cache_budget: int | str | None = None,
-    num_q_subj_candidates: int | None = None,
+    num_query_nodes: int | None = None,
 ) -> dict[int, list]:
-    """Single entry point that builds the per-llm path (with budget segment) and loads the per-K q_subj cache.
+    """Single entry point that builds the per-llm path (with budget segment) and loads the per-K query node cache.
 
-    Used when the ablation grid loads `q_subj_{norm}_nq{K}.json` per num_q_subj_candidates (K).
+    Used when the ablation grid loads `query_node_{norm}_nq{K}.json` per num_query_nodes (K).
     (The bundle loads once per (llm, trial) → K-independent, so per-K loading is done via this
     function within the grid.)
     """
@@ -154,7 +154,7 @@ def load_q_subj_for(
         / f"t{int(trial_idx)}" / "per-llm" / llm_name,
         cache_budget,
     )
-    return load_q_subj_cache(base, normalization, num_q_subj_candidates)
+    return load_query_node_cache(base, normalization, num_query_nodes)
 
 
 def _normalize_qa(qa: Any) -> dict:
@@ -180,8 +180,8 @@ def _normalize_qa(qa: Any) -> dict:
             "true_answer_choice": [col(r, "true_answer_choice", "true_answer") for r in qa],
             # list-of-records has no derived true_answer — derive from option if needed
             "questioner":         [col(r, "questioner", default="default") for r in qa],
-            "tkg_hop":            [col(r, "tkg_hop") for r in qa],
-            "gpt_4o_q_clf":       [col(r, "gpt_4o_q_clf", "gpt-4o-q_clf") for r in qa],
+            "hop_count":          [col(r, "hop_count") for r in qa],
+            "route_label":        [col(r, "route_label") for r in qa],
         }
     raise TypeError(f"Unsupported qa.json type: {type(qa)}")
 
@@ -251,8 +251,8 @@ def _load_emb(directory: Path, basename: str) -> np.ndarray | None:
     return None
 
 
-def _flatten_quad_emb(raw: Any) -> dict | None:
-    """Normalize a quad embedding pickle into a flat map that tkg_hybrid uses directly.
+def _flatten_record_emb(raw: Any) -> dict | None:
+    """Normalize a record embedding pickle into a flat map that the relational memory (R) uses directly.
 
     Storage format (conversion notebook):
         {session_idx: {"temporal": {key: vec}, "non_temporal": {key: vec}}}
@@ -261,7 +261,7 @@ def _flatten_quad_emb(raw: Any) -> dict | None:
         non_temporal = f"{head} {relation} {tail}"
 
     Returns:
-        {quad_string_key: vec}  (temporal + non_temporal merged into one dict)
+        {record_string_key: vec}  (temporal + non_temporal merged into one dict)
 
     If already in flat {key: vec} form, return as-is.
     """
@@ -294,12 +294,12 @@ def load_per_llm_precomputed(
 
     Path convention (raw/en suffix separated; budget branch via bNNNNN):
         {dataset_root}/{data_type}/precomputed/per-trial/t{N}/per-llm/{llm_name}/[bNNNNN/]
-            q_clf.json                                                 # {idx: "RAG"|"TKG"} (required)
-            q_subj.json                                                # {idx: [candidate,...]} (optional)
+            route.json                                                 # {idx: "RAG"|"R"} (required)
+            query_node.json                                            # {idx: [candidate,...]} (optional)
             {ie_type}/                                                 # openie / closedie / gt
-                partial_session_quadruples_{normalization}.json        # raw or en (required)
-                entire_session_quadruples_{normalization}.json         # raw or en (optional)
-                # legacy compat: partial_session_quadruples.json (no suffix) also loads as raw fallback
+                partial_session_records_{normalization}.json           # raw or en (required)
+                entire_session_records_{normalization}.json            # raw or en (optional)
+                # legacy compat: partial_session_records.json (no suffix) also loads as raw fallback
 
     If cache_budget is given (None means no segment = the original single layout), a `bNNNNN` segment
     is inserted directly under the LLM folder of per-llm/{llm}/ and common/{ie}/{llm}/. dialogue/question
@@ -308,7 +308,7 @@ def load_per_llm_precomputed(
     Cache miss → explicitly raises FileNotFoundError.
 
     Returns:
-        {"q_clf": dict[int,str], "partial_quadruples": list, "entire_quadruples": list|None}
+        {"route": dict[int,str], "partial_records": list, "entire_records": list|None}
     """
     import re as _re
     root = Path(dataset_root)
@@ -317,18 +317,18 @@ def load_per_llm_precomputed(
         root / data_type / "precomputed" / "per-trial" / f"t{trial_idx}" / "per-llm" / llm_name,
         cache_budget,
     )
-    q_clf_path = base / "q_clf.json"
+    route_path = base / "route.json"
     ie_dir = base / ie_type
 
-    def _load_split_q_clf(parent: Path) -> dict | None:
-        """Auto-merge split files (`q_clf_split_S_E.json`)."""
-        # A glob matching a stray file without the `_S_E` pattern (e.g. q_clf_split_tmp.json) would
+    def _load_split_route(parent: Path) -> dict | None:
+        """Auto-merge split files (`route_split_S_E.json`)."""
+        # A glob matching a stray file without the `_S_E` pattern (e.g. route_split_tmp.json) would
         #   make int(stem.split("_")[-2]) fail with ValueError and kill the whole load → handle it
-        #   robustly with regex + 0 fallback, like _load_split_quads.
-        def _qc_sort_key(p: Path) -> int:
+        #   robustly with regex + 0 fallback, like _load_split_records.
+        def _rt_sort_key(p: Path) -> int:
             m = _re.search(r"_split_(\d+)_", p.name)
             return int(m.group(1)) if m else 0
-        shards = sorted(parent.glob("q_clf_split_*.json"), key=_qc_sort_key)
+        shards = sorted(parent.glob("route_split_*.json"), key=_rt_sort_key)
         if not shards:
             return None
         merged: dict[int, str] = {}
@@ -343,7 +343,7 @@ def load_per_llm_precomputed(
                     merged[int(k) + s] = v
         return merged or None
 
-    def _load_split_quads(parent: Path, stem_prefix: str, full_n: int | None = None) -> list | None:
+    def _load_split_records(parent: Path, stem_prefix: str, full_n: int | None = None) -> list | None:
         """Merge split files (`{stem_prefix}_split_S_E.json`).
         full_n has no hardcoded default — the caller specifies it or it is auto-detected.
         Auto-detection: estimate from the shards' max(e). Prevents silent misalignment when other
@@ -378,9 +378,9 @@ def load_per_llm_precomputed(
                         merged[gi] = item
         return merged
 
-    # q_clf — explicit file → split fallback.
-    p_named = ie_dir / f"partial_session_quadruples_{normalization}.json"
-    p_legacy = ie_dir / "partial_session_quadruples.json"
+    # route — explicit file → split fallback.
+    p_named = ie_dir / f"partial_session_records_{normalization}.json"
+    p_legacy = ie_dir / "partial_session_records.json"
     if p_named.exists():
         partial_path = p_named
     elif p_legacy.exists() and normalization == "raw":
@@ -388,45 +388,46 @@ def load_per_llm_precomputed(
     else:
         partial_path = p_named
 
-    if not q_clf_path.exists() and not list(base.glob("q_clf_split_*.json")):
+    if not route_path.exists() and not list(base.glob("route_split_*.json")):
         raise FileNotFoundError(
-            f"per-LLM precomputed q_clf missing: {q_clf_path}\n"
+            f"per-LLM precomputed route missing: {route_path}\n"
             f"  → cache miss under the assistant==QA policy. Run per-LLM precompute (`--llms {llm_name}`) first, then retry."
         )
-    if not partial_path.exists() and not list(ie_dir.glob(f"partial_session_quadruples_{normalization}_split_*.json")):
+    if not partial_path.exists() and not list(ie_dir.glob(f"partial_session_records_{normalization}_split_*.json")):
         raise FileNotFoundError(
-            f"per-LLM precomputed partial quadruples missing: {partial_path}\n"
+            f"per-LLM precomputed partial records missing: {partial_path}\n"
             f"  → cache miss under the assistant==QA policy. Run per-LLM precompute "
             f"(`--llms {llm_name} --ie-types {ie_type}`) first, then retry.\n"
             f"  → if normalization={normalization!r} is needed, the en file generation step must also be included."
         )
 
-    # q_clf load: prefer the merged file, fall back to merging split files.
-    if q_clf_path.exists():
-        q_clf_raw = json.loads(local_first(q_clf_path).read_text(encoding="utf-8"))  # local-first
-        q_clf = {int(k): v for k, v in q_clf_raw.items()} if isinstance(q_clf_raw, dict) else q_clf_raw
+    # route load: prefer the merged file, fall back to merging split files.
+    if route_path.exists():
+        route_raw = json.loads(local_first(route_path).read_text(encoding="utf-8"))  # local-first
+        route = {int(k): v for k, v in route_raw.items()} if isinstance(route_raw, dict) else route_raw
     else:
-        q_clf = _load_split_q_clf(base) or {}
+        route = _load_split_route(base) or {}
 
-    # q_subj load (produced by precompute_q_subj.py, optional — if absent, an empty dict → the
-    #   ablation runtime live-computes only those idx as a fallback; the result is identical, only
-    #   slower). key=session_idx (=current_session_idx), val=q_subj candidate entity list.
-    # q_subj depends on quad (raw/en) → loaded per normalization (same convention as precompute_q_subj).
-    #   q_clf (above)/question/embedding are normalization-independent and shared.
-    #   q_subj can be split per K (num_q_subj_candidates) with `_nq{K}` → use load_q_subj_cache.
-    #   The bundle loads once per (llm, trial), so it holds only the K-independent default
-    #   (q_subj_{norm}.json) as a fallback. Per-K loading is done separately by the ablation grid /
-    #   simulate via load_q_subj_for (reflecting num_q_subj).
-    q_subj = load_q_subj_cache(base, normalization, num_q_subj_candidates=None)
+    # query node load (produced by the query-node precompute step, optional — if absent, an empty
+    #   dict → the ablation runtime live-computes only those idx as a fallback; the result is
+    #   identical, only slower). key=session_idx (=current_session_idx), val=query node candidate
+    #   entity list.
+    # query nodes depend on records (raw/en) → loaded per normalization (same convention as the
+    #   query-node precompute step). route (above)/question/embedding are normalization-independent
+    #   and shared. query nodes can be split per K (num_query_nodes) with `_nq{K}` → use
+    #   load_query_node_cache. The bundle loads once per (llm, trial), so it holds only the
+    #   K-independent default (query_node_{norm}.json) as a fallback. Per-K loading is done separately
+    #   by the ablation grid / simulate via load_query_nodes_for (reflecting num_query_nodes).
+    query_nodes = load_query_node_cache(base, normalization, num_query_nodes=None)
 
-    # partial_quads load: prefer the merged file, fall back to merging split files.
+    # partial_records load: prefer the merged file, fall back to merging split files.
     if partial_path.exists():
-        partial_quads = json.loads(local_first(partial_path).read_text(encoding="utf-8"))  # local-first (theoffice 1.5M+)
+        partial_records = json.loads(local_first(partial_path).read_text(encoding="utf-8"))  # local-first (theoffice 1.5M+)
     else:
-        partial_quads = _load_split_quads(ie_dir, f"partial_session_quadruples_{normalization}") or []
+        partial_records = _load_split_records(ie_dir, f"partial_session_records_{normalization}") or []
 
-    # entire quadruples are trial-independent → read from the common path.
-    #   (entire quadruple = dataset×data_type×LLM, trial-independent. Match the save path in
+    # entire records are trial-independent → read from the common path.
+    #   (entire records = dataset×data_type×LLM, trial-independent. Match the save path in
     #    per_llm_precompute.py (common/{ie}/{llm}/) — write/read paths in sync.)
     #   The budget segment sits directly under the LLM folder (same convention as per-llm).
     common_ie_dir = _apply_budget(
@@ -439,27 +440,27 @@ def load_per_llm_precomputed(
         n_entire = len(_es) if (isinstance(_es, list) and len(_es) > 0) else None  # empty list → None (auto-detect fallback)
     except Exception:
         n_entire = None
-    e_named = common_ie_dir / f"entire_session_quadruples_{normalization}.json"
-    e_legacy = common_ie_dir / "entire_session_quadruples.json"
-    e_split = list(common_ie_dir.glob(f"entire_session_quadruples_{normalization}_split_*.json"))
+    e_named = common_ie_dir / f"entire_session_records_{normalization}.json"
+    e_legacy = common_ie_dir / "entire_session_records.json"
+    e_split = list(common_ie_dir.glob(f"entire_session_records_{normalization}_split_*.json"))
     if e_split:
         # prefer session-shard results — so a stale single file does not shadow the split (prevents stale-read).
-        entire_quads = _load_split_quads(common_ie_dir, f"entire_session_quadruples_{normalization}",
-                                         full_n=n_entire)
+        entire_records = _load_split_records(common_ie_dir, f"entire_session_records_{normalization}",
+                                             full_n=n_entire)
     elif e_named.exists():
-        entire_quads = json.loads(local_first(e_named).read_text(encoding="utf-8"))  # local-first (theoffice 2.1M+)
+        entire_records = json.loads(local_first(e_named).read_text(encoding="utf-8"))  # local-first (theoffice 2.1M+)
     elif e_legacy.exists() and normalization == "raw":
-        entire_quads = json.loads(local_first(e_legacy).read_text(encoding="utf-8"))  # local-first
+        entire_records = json.loads(local_first(e_legacy).read_text(encoding="utf-8"))  # local-first
     else:
-        entire_quads = _load_split_quads(common_ie_dir, f"entire_session_quadruples_{normalization}",
-                                         full_n=n_entire)
+        entire_records = _load_split_records(common_ie_dir, f"entire_session_records_{normalization}",
+                                             full_n=n_entire)
 
     return {
-        "q_clf": q_clf,
-        "q_subj": q_subj,
-        "partial_quadruples": partial_quads,
-        "entire_quadruples": entire_quads,
-        # Include trial_idx for consistency. main.simulate.py's bundle is built by
+        "route": route,
+        "query_nodes": query_nodes,
+        "partial_records": partial_records,
+        "entire_records": entire_records,
+        # Include trial_idx for consistency. run_baseline.py's bundle is built by
         # load_converted_dataset / load_v1_2_1_trial, but this guarantees the same key when a future
         # caller invokes this directly.
         "trial_idx": trial_idx,
@@ -482,14 +483,14 @@ def load_converted_dataset(
         data_type    : 'normal' / 'newname' / 'shuffled'. (user-selectable for both v1_2/v1_3)
         trial_idx    : 0 / 1 / 2.
         ie_type      : 'openie' / 'closedie' / 'gt'. (user-selectable for both v1_2/v1_3)
-                       Also used in per_llm mode: load quads from per-llm/{llm_name}/{ie_type}/.
+                       Also used in per_llm mode: load records from per-llm/{llm_name}/{ie_type}/.
         normalization: 'raw' / 'en'. For gt, 'raw' only is recommended. (ignored when per_llm_name is
                        active — the per-llm cache has no separate normalization branch. Extend the
                        path convention if needed.)
-        per_llm_name : the assistant==QA policy from v1_3 onward. When set, both triple/q_clf are
-                       loaded from per-llm/{llm_name}/, and qa.json's gpt_4o_q_clf is ignored.
+        per_llm_name : the assistant==QA policy from v1_3 onward. When set, both triple/route are
+                       loaded from per-llm/{llm_name}/, and qa.json's route_label is ignored.
                        Cache miss → FileNotFoundError (no live fallback; explicit precompute required).
-        cache_budget : reasoning-budget branch of the extraction cache (q_clf/q_subj/triple/quadruple).
+        cache_budget : reasoning-budget branch of the extraction cache (route/query_node/triple/record).
                        None → no segment (original single layout). Positive int → insert a `bNNNNN`
                        segment under per-llm/{llm}/ and common/{ie}/{llm}/. Only valid in per_llm_name
                        mode (the v1_2 non-per_llm path does not support the budget branch).
@@ -500,10 +501,10 @@ def load_converted_dataset(
         questions              : list[Question | None]
         entire_dialogue_emb    : np.ndarray | None
         partial_dialogue_emb   : np.ndarray | None
-        entire_quadruples      : list[list[dict]] | None   (per-session quad list)
-        partial_quadruples     : list[list[dict]] | None
-        entire_quad_emb        : dict | None               (quadruple embeddings; None in per-llm mode)
-        partial_quad_emb       : dict | None
+        entire_records         : list[list[dict]] | None   (per-session record list)
+        partial_records        : list[list[dict]] | None
+        entire_record_emb      : dict | None               (record embeddings; None in per-llm mode)
+        partial_record_emb     : dict | None
     """
     root = Path(dataset_root)
 
@@ -571,9 +572,9 @@ def load_converted_dataset(
     else:
         partial_emb = _load_emb(trial_dir, "partial_session_embedding")
 
-    # === Triple / q_clf : per_llm_name branch ===
-    per_llm_q_clf: dict[int, str] | None = None
-    per_llm_q_subj: dict[int, list] = {}  # produced by precompute_q_subj.py (filled only in per_llm mode)
+    # === Triple / route : per_llm_name branch ===
+    per_llm_route: dict[int, str] | None = None
+    per_llm_query_nodes: dict[int, list] = {}  # produced by the query-node precompute step (filled only in per_llm mode)
     if per_llm_name is not None:
         # v1_3+ assistant==QA policy — the ie_type subdir is also branched inside per-llm (user choice).
         # pass normalization (raw/en) — to compare the two variants in ablation.
@@ -582,12 +583,12 @@ def load_converted_dataset(
             ie_type=ie_type, normalization=normalization,
             cache_budget=cache_budget,
         )
-        entire_quads = per_llm["entire_quadruples"]
-        partial_quads = per_llm["partial_quadruples"]
-        per_llm_q_clf = per_llm["q_clf"]
-        per_llm_q_subj = per_llm.get("q_subj") or {}
-        entire_quad_emb = None
-        partial_quad_emb = None
+        entire_records = per_llm["entire_records"]
+        partial_records = per_llm["partial_records"]
+        per_llm_route = per_llm["route"]
+        per_llm_query_nodes = per_llm.get("query_nodes") or {}
+        entire_record_emb = None
+        partial_record_emb = None
     else:
         # cache_budget is per_llm-mode only — raise explicitly rather than silently ignoring it on the non-per_llm (v1_2) path.
         if budget_segment(cache_budget):
@@ -595,34 +596,34 @@ def load_converted_dataset(
                 f"cache_budget={cache_budget!r} is only supported in per_llm_name mode. "
                 f"The non-per_llm (v1_2) path has no budget-branch cache — use data.per_llm_precomputed: true."
             )
-        # v1_2 (original) — IE pre-computed (OpenIE/GT) + qa.json gpt_4o_q_clf
+        # v1_2 (original) — IE pre-computed (OpenIE/GT) + qa.json route_label
         common_ie_dir = root / data_type / "precomputed" / "common" / ie_type
         trial_ie_dir = trial_dir / ie_type
 
-        entire_quads_path = common_ie_dir / f"entire_session_quadruples_{normalization}.json"
-        partial_quads_path = trial_ie_dir / f"partial_session_quadruples_{normalization}.json"
-        entire_quads = (
-            _load_json_strict(entire_quads_path, f"common/{ie_type}/entire_session_quadruples_{normalization}.json") if entire_quads_path.exists() else None
+        entire_records_path = common_ie_dir / f"entire_session_records_{normalization}.json"
+        partial_records_path = trial_ie_dir / f"partial_session_records_{normalization}.json"
+        entire_records = (
+            _load_json_strict(entire_records_path, f"common/{ie_type}/entire_session_records_{normalization}.json") if entire_records_path.exists() else None
         )
-        partial_quads = (
-            _load_json_strict(partial_quads_path, f"per-trial/t{trial_idx}/{ie_type}/partial_session_quadruples_{normalization}.json") if partial_quads_path.exists() else None
+        partial_records = (
+            _load_json_strict(partial_records_path, f"per-trial/t{trial_idx}/{ie_type}/partial_session_records_{normalization}.json") if partial_records_path.exists() else None
         )
 
-        entire_quad_emb_path = (
-            common_ie_dir / f"entire_session_quadruples_embedding_{normalization}.pickle"
+        entire_record_emb_path = (
+            common_ie_dir / f"entire_session_records_embedding_{normalization}.pickle"
         )
-        partial_quad_emb_path = (
-            trial_ie_dir / f"partial_session_quadruples_embedding_{normalization}.pickle"
+        partial_record_emb_path = (
+            trial_ie_dir / f"partial_session_records_embedding_{normalization}.pickle"
         )
-        # Load quad embeddings (theoffice is the heaviest) local-first too.
+        # Load record embeddings (theoffice is the heaviest) local-first too.
         #   .exists() checks the NAS original (unchanged); only load uses local_first (the local copy
-        #   if present, otherwise NAS). Previously only dialogue/question were local-first, so quads
+        #   if present, otherwise NAS). Previously only dialogue/question were local-first, so records
         #   were always loaded from NAS → theoffice was slow.
-        entire_quad_emb = (
-            _flatten_quad_emb(load_pickle(local_first(entire_quad_emb_path))) if entire_quad_emb_path.exists() else None
+        entire_record_emb = (
+            _flatten_record_emb(load_pickle(local_first(entire_record_emb_path))) if entire_record_emb_path.exists() else None
         )
-        partial_quad_emb = (
-            _flatten_quad_emb(load_pickle(local_first(partial_quad_emb_path))) if partial_quad_emb_path.exists() else None
+        partial_record_emb = (
+            _flatten_record_emb(load_pickle(local_first(partial_record_emb_path))) if partial_record_emb_path.exists() else None
         )
 
     # === Session / Question mapping ===
@@ -636,43 +637,43 @@ def load_converted_dataset(
     questions_text = qa.get("question", [""] * n)
     options_per_session = qa.get("option", [[] for _ in range(n)])
     true_answer_choice = qa.get("true_answer_choice", [None] * n)
-    # q_clf : per-llm cache in per_llm mode, otherwise qa.json's gpt_4o_q_clf
-    if per_llm_q_clf is not None:
-        q_clf_labels = [per_llm_q_clf.get(i) for i in range(n)]
+    # route : per-llm cache in per_llm mode, otherwise qa.json's route_label
+    if per_llm_route is not None:
+        route_labels = [per_llm_route.get(i) for i in range(n)]
     else:
-        q_clf_labels = qa.get("gpt_4o_q_clf", [None] * n)
-    tkg_hops = qa.get("tkg_hop", [None] * n)
+        route_labels = qa.get("route_label", [None] * n)
+    hop_counts = qa.get("hop_count", [None] * n)
 
     for i in range(n):
         partial_d = partial_dialogues[i] if i < len(partial_dialogues) else ""
-        # Whether partial quadruples are the *cumulative KG up to that point* or *that session alone*
+        # Whether partial records are the *cumulative memory up to that point* or *that session alone*
         # depends on the data.
-        # entire→Session.entire_quadruples, partial→Session.partial_quadruples delivered separately.
-        #   Memory (tkg_hybrid) assigns meaning at commit (cumulative entire KG) / retrieve (merges the current session's partial).
-        # quadruple json format (dual schema):
+        # entire→Session.entire_records, partial→Session.partial_records delivered separately.
+        #   Memory (R) assigns meaning at commit (cumulative entire memory) / retrieve (merges the current session's partial).
+        # record json format (dual schema):
         #   v1_2 conversion notebook → list-of-list (sessions[i] = [[head, rel, tail, date], ...])
         #   v1_3 conversion notebook → list-of-dict  (sessions[i] = [{"head":..., "relation":..., "tail":..., "start_date":...}, ...])
-        # Both formats are accepted and converted to the Quad dataclass.
-        # TKG/RAG symmetry — entire/partial quads as separate Session fields.
-        #   _to_quad_tuple: converts both list-of-dict (v1_3) / list-of-list (v1_2) to Quad tuples.
-        def _to_quad_tuple(raw_list) -> tuple[Quad, ...] | None:
-            ql: list[Quad] = []
-            for q in raw_list:
-                if isinstance(q, dict):
-                    ql.append(Quad(
-                        head=q["head"], relation=q["relation"],
-                        tail=q["tail"], start_date=q["start_date"],
+        # Both formats are accepted and converted to the Record dataclass.
+        # R/RAG symmetry — entire/partial records as separate Session fields.
+        #   _to_record_tuple: converts both list-of-dict (v1_3) / list-of-list (v1_2) to Record tuples.
+        def _to_record_tuple(raw_list) -> tuple[Record, ...] | None:
+            rl: list[Record] = []
+            for r in raw_list:
+                if isinstance(r, dict):
+                    rl.append(Record(
+                        head=r["head"], relation=r["relation"],
+                        tail=r["tail"], start_date=r["start_date"],
                     ))
                 else:
-                    ql.append(Quad(head=q[0], relation=q[1], tail=q[2], start_date=q[3]))
-            return tuple(ql)
+                    rl.append(Record(head=r[0], relation=r[1], tail=r[2], start_date=r[3]))
+            return tuple(rl)
 
-        partial_quads_i: tuple[Quad, ...] | None = None
-        if partial_quads is not None and i < len(partial_quads):
-            partial_quads_i = _to_quad_tuple(partial_quads[i])
-        entire_quads_i: tuple[Quad, ...] | None = None
-        if entire_quads is not None and i < len(entire_quads):
-            entire_quads_i = _to_quad_tuple(entire_quads[i])
+        partial_records_i: tuple[Record, ...] | None = None
+        if partial_records is not None and i < len(partial_records):
+            partial_records_i = _to_record_tuple(partial_records[i])
+        entire_records_i: tuple[Record, ...] | None = None
+        if entire_records is not None and i < len(entire_records):
+            entire_records_i = _to_record_tuple(entire_records[i])
 
         # Inject the precomputed dialogue embedding (avoids a duplicate call inside commit()).
         d_emb = entire_emb[i] if entire_emb is not None and i < len(entire_emb) else None
@@ -687,8 +688,8 @@ def load_converted_dataset(
                 questioner=q_str,
                 dialogue=entire_dialogues[i] if i < len(entire_dialogues) else "",
                 partial_dialogue=partial_d,
-                entire_quadruples=entire_quads_i,
-                partial_quadruples=partial_quads_i,
+                entire_records=entire_records_i,
+                partial_records=partial_records_i,
                 dialogue_embedding=d_emb,
                 partial_embedding=p_emb,
             )
@@ -710,25 +711,25 @@ def load_converted_dataset(
                 timestamp=dates[i],
                 true_answer=true_answer_choice[i] if i < len(true_answer_choice) else None,
                 # converted data has no pre-built prompts (live-retrieval mode only).
-                prebuilt_prompt_rag=None,
-                prebuilt_prompt_tkg=None,
+                prebuilt_prompt_sessions=None,
+                prebuilt_prompt_records=None,
                 prebuilt_prompt_no_history=None,
-                q_clf_label=q_clf_labels[i] if i < len(q_clf_labels) else None,
-                tkg_hop=tkg_hops[i] if i < len(tkg_hops) else None,
+                route_label=route_labels[i] if i < len(route_labels) else None,
+                hop_count=hop_counts[i] if i < len(hop_counts) else None,
             )
         )
 
     return {
         "sessions": sessions,
         "questions": questions,
-        "q_subj": per_llm_q_subj,  # {session_idx: candidate list} (per_llm mode only, else {})
+        "query_nodes": per_llm_query_nodes,  # {session_idx: candidate list} (per_llm mode only, else {})
         "entire_dialogue_emb": entire_emb,
         "partial_dialogue_emb": partial_emb,
-        "entire_quadruples": entire_quads,
-        "partial_quadruples": partial_quads,
-        "entire_quad_emb": entire_quad_emb,
-        "partial_quad_emb": partial_quad_emb,
-        # main.simulate.py's shared_bundle trial-mismatch warning was permanently silent dead code
+        "entire_records": entire_records,
+        "partial_records": partial_records,
+        "entire_record_emb": entire_record_emb,
+        "partial_record_emb": partial_record_emb,
+        # run_baseline.py's shared_bundle trial-mismatch warning was permanently silent dead code
         # (the returned dict had no trial_idx). Made explicit.
         "trial_idx": trial_idx,
     }
@@ -748,13 +749,13 @@ def load_v1_2_1_trial(
           'question':                list[str],           # len=N
           'option':                  list[list[str]],     # len=N
           'true_answer':             list[str],           # e.g. '(A)'
-          'tkg_hop':                 list[int],           # -1/1/2
+          'hop_count':               list[int],           # -1/1/2
           'answer':                  list[str],           # (unused)
           'partial_session_dialogue': list[str],          # len=N
           'session_dialogue':        list[str],           # len=N
           'idx':                     list[int],           # len=N
           'date':                    list[str],           # len=N
-          'gpt-4o-q_clf':            list[str],           # 'RAG'/'TKG'
+          'route_label':             list[str],           # 'RAG'/'R'
           'document_embedding': {
               'sentence-transformer': np.ndarray (N, 384),
               'openai-embedding':     dict{dialogue_text: list[1536-dim]},
@@ -771,13 +772,13 @@ def load_v1_2_1_trial(
         questions              : list[Question | None]
         entire_dialogue_emb    : np.ndarray | None   (document openai-embedding, N×1536)
         partial_dialogue_emb   : None                (v1.2.1 has no separate partial embedding)
-        entire_quadruples      : None                (v1.2.1 raw pickle has no quad list)
-        partial_quadruples     : None
-        entire_quad_emb        : None
-        partial_quad_emb       : None
+        entire_records         : None                (v1.2.1 raw pickle has no record list)
+        partial_records        : None
+        entire_record_emb      : None
+        partial_record_emb     : None
 
-    NOTE: Since there are no quads, only tkg_hybrid's 'rag_only' or 'enhanced' retrieval_method is
-    meaningful. 'tkg_only' / 'tkg_rag' fall back to an empty KG.
+    NOTE: Since this legacy loader provides no extracted records, only the raw session
+    repository (S) view carries evidence; the relational memory (R) falls back to empty.
     """
     import numpy as _np
 
@@ -803,7 +804,7 @@ def load_v1_2_1_trial(
             if vec is not None:
                 vecs.append(_np.array(vec, dtype=_np.float32))
             else:
-                # miss → zero-vec (the live embed fallback is handled by main.simulate)
+                # miss → zero-vec (the live embed fallback is handled by run_baseline)
                 vecs.append(_np.zeros(1536, dtype=_np.float32))
         entire_emb = _np.stack(vecs)  # (N, 1536)
 
@@ -818,12 +819,12 @@ def load_v1_2_1_trial(
     options_list = d["option"]
     true_answers = d.get("true_answer", [None] * n)
     dates = d["date"]
-    # q_clf_label: the pickle may contain values with embedded JSON quotes like '"TKG"' → strip
-    q_clf_labels = [
+    # route_label: the pickle may contain values with embedded JSON quotes like '"R"' → strip
+    route_labels = [
         str(v).strip().strip('"') if v is not None else None
-        for v in d.get("gpt-4o-q_clf", [None] * n)
+        for v in d.get("route_label", [None] * n)
     ]
-    tkg_hops = d.get("tkg_hop", [None] * n)
+    hop_counts = d.get("hop_count", [None] * n)
     partial_dialogues = d.get("partial_session_dialogue", dialogues)
 
     sessions: list[Session] = []
@@ -839,8 +840,8 @@ def load_v1_2_1_trial(
                 questioner=q_str,
                 dialogue=dialogues[i] if i < len(dialogues) else "",
                 partial_dialogue=partial_dialogues[i] if i < len(partial_dialogues) else "",
-                entire_quadruples=None,   # v1.2.1 raw pickle has no quad list
-                partial_quadruples=None,
+                entire_records=None,   # v1.2.1 raw pickle has no record list
+                partial_records=None,
                 dialogue_embedding=d_emb,
                 partial_embedding=None,
             )
@@ -860,15 +861,15 @@ def load_v1_2_1_trial(
                 options=tuple(options_list[i]) if i < len(options_list) else (),
                 timestamp=dates[i],
                 true_answer=ta,
-                prebuilt_prompt_rag=None,
-                prebuilt_prompt_tkg=None,
+                prebuilt_prompt_sessions=None,
+                prebuilt_prompt_records=None,
                 prebuilt_prompt_no_history=None,
-                q_clf_label=q_clf_labels[i] if i < len(q_clf_labels) else None,
-                tkg_hop=tkg_hops[i] if i < len(tkg_hops) else None,
+                route_label=route_labels[i] if i < len(route_labels) else None,
+                hop_count=hop_counts[i] if i < len(hop_counts) else None,
             )
         )
 
-    # Extract the trial from the pickle_path stem (e.g. trial0.pickle → 0), so main.simulate.py's
+    # Extract the trial from the pickle_path stem (e.g. trial0.pickle → 0), so run_baseline.py's
     # trial-mismatch warning works.
     import re as _re
     _stem = Path(pickle_path).stem  # e.g., "trial0"
@@ -879,10 +880,10 @@ def load_v1_2_1_trial(
         "questions": questions,
         "entire_dialogue_emb": entire_emb,
         "partial_dialogue_emb": None,
-        "entire_quadruples": None,
-        "partial_quadruples": None,
-        "entire_quad_emb": None,
-        "partial_quad_emb": None,
+        "entire_records": None,
+        "partial_records": None,
+        "entire_record_emb": None,
+        "partial_record_emb": None,
         # None on parse failure (e.g. a different naming convention) — simulate.py's warning skips when None.
         "trial_idx": _trial_idx,
     }

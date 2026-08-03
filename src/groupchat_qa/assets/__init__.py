@@ -2,7 +2,7 @@
 
 Prompt templates live in the repository's top-level ``prompts/`` directory (see the
 README structure diagram); ``PROMPT_DIR`` resolves there so that
-``load_prompt("q_clf.txt")`` works out of the box under the documented
+``load_prompt("qa_records.txt")`` works out of the box under the documented
 ``PYTHONPATH=src python ...`` invocation from the repo root. If a top-level
 ``prompts/`` directory is not found (e.g. when the package is installed as a wheel
 without it), it falls back to a ``prompt/`` directory bundled next to this file.

@@ -1,8 +1,8 @@
 # Example config: Oracle upper bound (perfect retrieval + routing). BigBang, newname, trial 0, Qwen.
-# Single-phase QA run via src/run/main.simulate.py.
+# Single-phase QA run via src/run/run_baseline.py.
 
 data:
-  dataset_root: ./data/v1_3_1/bigbang
+  dataset_root: ./data/bigbang
   data_type: newname
   trial: 0
   ie_type: openie
@@ -37,15 +37,15 @@ memory:
   question_format: multi_structured
   context_size: 0
   fallback: true
-  num_retrieved_tkg: 350
-  num_retrieved_rag: 40
-  quad_format: quad
+  num_records: 40
+  num_sessions: 250
+  record_format: record
   normalization: raw
   delimiter: ========================================
   oracle_dialogue_rank: alternating
-  prompt_rag: qa_rag.txt
-  prompt_quad: qa_quad.txt
-  prompt_no_history: qa_no-history-eager.multi-structured.txt
+  prompt_sessions: qa_sessions.txt
+  prompt_records: qa_records.txt
+  prompt_no_history: qa_no-history.txt
 run:
   seed: 42
   start_session_idx: 0
@@ -53,7 +53,7 @@ run:
   session_filter: all
   commit_only: false
   log_prompts: true
-  log_prompts_dir: log/v1_3_1_oracle/prompts/bigbang.newname.t0.qwen3.5-35b-a3b-on
+  log_prompts_dir: log/oracle/prompts/bigbang.newname.t0.qwen3.5-35b-a3b-on
   answer_max_workers: 16
   qa_eval_mode: mcq
   result_save_every: 300

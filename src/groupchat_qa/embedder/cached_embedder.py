@@ -8,7 +8,7 @@ Purpose: whenever a baseline (a_mem/hipporag2/mem0) calls `self.embedder.embed` 
 The same text is embedded once and reused regardless of LLM/session/run (text-keyed).
 
 The baseline code is not changed at all — the runner injects the base embedder wrapped by this
-wrapper, so `embed`/`embed_one` automatically go through the cache. tkg_hybrid uses its own quad
+wrapper, so `embed`/`embed_one` automatically go through the cache. GroupChat-Mem uses its own record
 cache separately, so this wrapper applies only to baselines enabled via config (`embedder.cache: true`).
 
 Concurrency: even when multiple LLM threads share one CachedEmbedder instance, EmbeddingCache's

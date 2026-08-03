@@ -1,29 +1,28 @@
 """Oracle memory — retrieval upper-bound (perfect evidence + perfect routing).
 
-Background: for DialSim's time-indexed QA, measure "how well the model does if
+Background: for time-indexed group-chat QA, measure "how well the model does if
 retrieval were perfect" (the retrieval ceiling). Bypasses the memory backend's live
 retrieval and injects an **already-built oracle bundle** (output of
 `preprocess/v1_3_1/build_oracle.py`) as the retrieved context.
 
-Isolation principle: a separate module that never touches the existing methods
-(tkg_only/rag_only/tkg_rag/enhanced). Registered in the factory under
+Isolation principle: a separate module that never touches the memory methods. Registered in the factory under
 `name == "oracle"`. QA prompt assembly reuses the **same** templates and render
-functions as tkg_hybrid to match prompt format (same format + oracle evidence = a fair ceiling).
+functions as GroupChat-Mem to match prompt format (same format + oracle evidence = a fair ceiling).
 
 Oracle bundle structure (build_oracle.py):
   - dialogue bundle (LLM-independent): {root}/{dt}/oracle/trial{N}.oracle.dialogue.json
         list[entry], entry = {session_idx, question, questioner, q_kind, q_type, timestamp,
                               oracle_dialogues_by_{cosine,bm25,alternating}}
-  - quad bundle (per LLM & norm):  {root}/{dt}/oracle/{llm}/trial{N}.oracle_{raw|en_node|en_triple}.json
-        list[entry], entry = {... , oracle_quadruples_by_cosine: list[{head,relation,tail,start_date}]}
+  - record bundle (per LLM & norm): {root}/{dt}/oracle/{llm}/trial{N}.oracle_{raw|en_node|en_triple}.json
+        list[entry], entry = {... , oracle_records_by_cosine: list[{head,relation,tail,start_date}]}
   Both bundles are in the same order (one entry per question). entry.session_idx = the session the question was asked in = current_session_idx.
 
 Routing: select modality by GT q_kind — perfect routing + perfect retrieval = the true ceiling.
-  - q_kind == 'tkg' → TKG route, oracle quads (cosine) into the {triples} slot.
+  - q_kind == 'records' → records route, oracle records (cosine) into the {triples} slot.
   - else (fan, etc.) → RAG route, oracle dialogues (alternating) into the {history} slot.
-  If fallback=True and the first answer is (E), try once more with the opposite modality (matches tkg_hybrid's (E)-fallback).
+  If fallback=True and the first answer is (E), try once more with the opposite modality (matches GroupChat-Mem's (E)-fallback).
 
-Ordering: build_oracle already sorts (dialogue=alternating, quad=cosine) → used **as-is without re-sorting**.
+Ordering: build_oracle already sorts (dialogue=alternating, records=cosine) → used **as-is without re-sorting**.
       "use all as evidence" (context_size off = unlimited). raw normalization.
 
 Future leakage: the oracle bundle is collected at build time by date-matching against
@@ -53,8 +52,8 @@ from groupchat_qa.utils import (
 )
 
 from .base import Memory
-# Reuse tkg_hybrid's quad renderer to match prompt format (for a fair comparison).
-from .tkg_hybrid import _render_quads_in_order
+# Reuse GroupChat-Mem's record renderer to match prompt format (for a fair comparison).
+from .groupchat_mem import _render_records_in_order
 
 LOGGER = logging.getLogger(__name__)
 
@@ -76,45 +75,42 @@ class OracleMemory(Memory):
     def __init__(self, llm: LLM, embedder: Embedder, cfg: dict[str, Any]):
         super().__init__(llm, embedder, cfg)
         self.question_format = cfg.get("question_format", "multi_structured")
-        self.quad_format = cfg.get("quad_format", "quad")
+        self.record_format = cfg.get("record_format", "record")
         # context_size: 0/negative = token limit off (unlimited). serving max-model-len is the real ceiling.
         self.context_size = int(cfg.get("context_size", 0) or 0)
         self.fallback = bool(cfg.get("fallback", True))
-        # dialogue_only=True → no quad/TKG route, always dialogue (RAG) route.
+        # dialogue_only=True → no records route, always sessions route.
         #   Oracle = uses only the set of entire-session dialogues (alternating order)
-        #   from each question's oracle-timestamp sessions (no triple/quad). Usually
+        #   from each question's oracle-timestamp sessions (no records). Usually
         #   single-shot with fallback=false. In this mode, load succeeds even without a
-        #   quad bundle (quad_by_key stays empty).
+        #   record bundle (record_by_key stays empty).
         self.dialogue_only = bool(cfg.get("oracle_dialogue_only", False))
-        # enhanced=True → inject **both** the entire dialogue and (GT) quad from each
-        #   question's oracle-timestamp sessions via qa_enhanced.txt simultaneously
+        # dual=True → inject **both** the entire dialogue and (GT) records from each
+        #   question's oracle-timestamp sessions via qa_dual.txt simultaneously
         #   (all, k unlimited; a separate path isolated from route-select / dialogue_only).
-        #   The GT quad is usually loaded from the llm_name='gt' bundle
-        #   (convert_gt_quad.py + build_oracle.py --llms gt).
-        self.enhanced = bool(cfg.get("oracle_enhanced", False))
-        # quad_only=True → always TKG (quad) route + qa_quad regardless of q_kind.
-        #   Inject only the GT quad union (oracle_quadruples_by_cosine) from each
+        #   The GT records are usually loaded from the llm_name='gt' bundle.
+        self.dual = bool(cfg.get("oracle_dual", False))
+        # records_only=True → always records route + qa_records regardless of q_kind.
+        #   Inject only the GT record union (oracle_records_by_cosine) from each
         #   question's oracle-timestamp sessions (no dialogue; the mirror of
-        #   dialogue_only). k_tkg=0 means all. Usually single-shot with fallback=false.
-        self.quad_only = bool(cfg.get("oracle_quad_only", False))
+        #   dialogue_only). k_records=0 means all. Usually single-shot with fallback=false.
+        self.records_only = bool(cfg.get("oracle_records_only", False))
         self.delimiter = cfg.get("delimiter", "=" * 40)
-        # top-k truncation — a fair ceiling using the same budget as the methods (tkg_rag, etc.).
-        #   Uses only the top-k of the already-sorted evidence (quads=cosine, dials=alternating).
-        #   num_retrieved_tkg (quad, default 350), num_retrieved_rag (dialogue, default 40).
+        # top-k truncation — a fair ceiling using the same budget as the memory methods.
+        #   Uses only the top-k of the already-sorted evidence (records=cosine, dials=alternating).
+        #   num_records (records, default 40), num_sessions (dialogue, default 250).
         #   0/negative = truncation off (all) — but the main policy defaults to 40/350.
-        self.k_tkg = int(cfg.get("num_retrieved_tkg", 350) or 0)
-        self.k_rag = int(cfg.get("num_retrieved_rag", 40) or 0)
+        self.k_records = int(cfg.get("num_records", 40) or 0)
+        self.k_sessions = int(cfg.get("num_sessions", 250) or 0)
         # dialogue ordering choice — build_oracle policy defaults to alternating.
         self.dialogue_rank = str(cfg.get("oracle_dialogue_rank", "alternating")).lower()
 
-        # QA prompt templates — same files as tkg_hybrid.
-        self._p_rag = load_prompt(cfg.get("prompt_rag") or "qa_rag.txt")
-        self._p_quad = load_prompt(cfg.get("prompt_quad") or "qa_quad.txt")
-        self._p_no_hist = load_prompt(
-            cfg.get("prompt_no_history") or "qa_no-history-eager.multi-structured.txt"
-        )
-        # For enhanced mode — same template as tkg_hybrid enhanced ({question}/{triples}/{history}).
-        self._p_enhanced = load_prompt(cfg.get("prompt_enhanced") or "qa_enhanced.txt")
+        # QA prompt templates — same files as GroupChat-Mem.
+        self._p_sessions = load_prompt(cfg.get("prompt_sessions") or "qa_sessions.txt")
+        self._p_records = load_prompt(cfg.get("prompt_records") or "qa_records.txt")
+        self._p_no_hist = load_prompt(cfg.get("prompt_no_history") or "qa_no-history.txt")
+        # For dual mode — same template as GroupChat-Mem's dual prompt ({question}/{triples}/{history}).
+        self._p_dual = load_prompt(cfg.get("prompt_dual") or "qa_dual.txt")
 
         # Load oracle bundles + build lookup.
         self._lookup: dict[tuple, dict] = {}
@@ -128,12 +124,12 @@ class OracleMemory(Memory):
         dt = cfg.get("data_type")
         trial = cfg.get("trial")
         llm_name = cfg.get("llm_name")
-        # Quad-bundle LLM override. main.simulate injects mem_cfg["llm_name"] as the
-        #   QA LLM (qwen, etc.), so to use the GT quad (oracle/gt/) set
-        #   oracle_quad_llm='gt' in cfg to point only the quad-bundle path elsewhere
+        # Record-bundle LLM override. run_baseline injects mem_cfg["llm_name"] as the
+        #   QA LLM (qwen, etc.), so to use the GT records (oracle/gt/) set
+        #   oracle_record_llm='gt' in cfg to point only the record-bundle path elsewhere
         #   (dialogue is LLM-independent, one file, so unchanged). If unset, use
         #   llm_name (fully preserving the original oracle behavior).
-        quad_llm = cfg.get("oracle_quad_llm") or llm_name
+        record_llm = cfg.get("oracle_record_llm") or llm_name
         norm = cfg.get("normalization", "raw")
         if not (ds_root and dt and trial is not None and llm_name):
             raise ValueError(
@@ -143,23 +139,23 @@ class OracleMemory(Memory):
         trial = int(trial)
         oracle_dir = Path(ds_root) / dt / "oracle"
         dlg_path = oracle_dir / f"trial{trial}.oracle.dialogue.json"
-        quad_path = oracle_dir / quad_llm / f"trial{trial}.oracle_{norm}.json"
+        record_path = oracle_dir / record_llm / f"trial{trial}.oracle_{norm}.json"
         if not dlg_path.exists():
             raise FileNotFoundError(f"[oracle] dialogue bundle not found: {dlg_path} (run build_oracle.py first)")
-        if not self.dialogue_only and not quad_path.exists():
-            raise FileNotFoundError(f"[oracle] quad bundle not found: {quad_path} (run build_oracle.py first)")
+        if not self.dialogue_only and not record_path.exists():
+            raise FileNotFoundError(f"[oracle] record bundle not found: {record_path} (run build_oracle.py first)")
 
         with open(dlg_path, encoding="utf-8") as f:
             dlg_list = json.load(f)
 
-        # Index the quad bundle by key (same order, but match by key to be safe). If dialogue_only, quad is unneeded → empty dict.
-        quad_by_key: dict[tuple, list] = {}
+        # Index the record bundle by key (same order, but match by key to be safe). If dialogue_only, records are unneeded → empty dict.
+        record_by_key: dict[tuple, list] = {}
         if not self.dialogue_only:
-            with open(quad_path, encoding="utf-8") as f:
-                quad_list = json.load(f)
-            for q in quad_list:
-                quad_by_key[_entry_key(q["session_idx"], q["question"])] = list(
-                    q.get("oracle_quadruples_by_cosine", []) or []
+            with open(record_path, encoding="utf-8") as f:
+                record_list = json.load(f)
+            for q in record_list:
+                record_by_key[_entry_key(q["session_idx"], q["question"])] = list(
+                    q.get("oracle_records_by_cosine", []) or []
                 )
 
         for e in dlg_list:
@@ -168,11 +164,11 @@ class OracleMemory(Memory):
             self._lookup[key] = {
                 "q_kind": str(e.get("q_kind", "")).lower(),
                 "dials": dials,
-                "quads": quad_by_key.get(key, []),
+                "records": record_by_key.get(key, []),
             }
         LOGGER.info(
-            "[oracle] bundles loaded: dialogue=%s quad=%s → lookup %d entries (llm=%s norm=%s t%d)",
-            dlg_path.name, quad_path.name, len(self._lookup), llm_name, norm, trial,
+            "[oracle] bundles loaded: dialogue=%s record=%s → lookup %d entries (llm=%s norm=%s t%d)",
+            dlg_path.name, record_path.name, len(self._lookup), llm_name, norm, trial,
         )
 
     def _pick_dialogues(self, entry: dict) -> list:
@@ -201,15 +197,15 @@ class OracleMemory(Memory):
         return CallMetrics()
 
     # ------------------------------------------------------------------
-    # Rendering — same format as tkg_hybrid
+    # Rendering — same format as GroupChat-Mem
     # ------------------------------------------------------------------
-    def _render_tkg(self, quads: list) -> str:
-        rendered, _ = _render_quads_in_order(
-            quads, self.quad_format, self.context_size, self._p_quad
+    def _render_records(self, records: list) -> str:
+        rendered, _ = _render_records_in_order(
+            records, self.record_format, self.context_size, self._p_records
         )
         return rendered
 
-    def _render_rag(self, dials: list) -> str:
+    def _render_sessions(self, dials: list) -> str:
         if not dials:
             return "No relevant history!"
         sep = f"\n{self.delimiter}\n"
@@ -230,94 +226,94 @@ class OracleMemory(Memory):
 
     def _retrieve_route(self, question: Question, current_session_idx: int,
                         route: str) -> RetrievalResult:
-        """Render oracle evidence for route ('TKG'|'RAG')."""
+        """Render oracle evidence for route ('RECORDS'|'SESSIONS')."""
         e = self._lookup_entry(question, current_session_idx)
-        quads = e["quads"] if e else []
+        records = e["records"] if e else []
         dials = e["dials"] if e else []
-        # top-k truncation (already sorted: quads=cosine, dials=alternating, top first). k<=0 = all.
-        if self.k_tkg > 0:
-            quads = quads[: self.k_tkg]
-        if self.k_rag > 0:
-            dials = dials[: self.k_rag]
-        if route == "TKG":
-            rendered = self._render_tkg(quads)
-            items = [Item(text=str(q)) for q in quads]
+        # top-k truncation (already sorted: records=cosine, dials=alternating, top first). k<=0 = all.
+        if self.k_records > 0:
+            records = records[: self.k_records]
+        if self.k_sessions > 0:
+            dials = dials[: self.k_sessions]
+        if route == "RECORDS":
+            rendered = self._render_records(records)
+            items = [Item(text=str(q)) for q in records]
         else:
-            rendered = self._render_rag(dials)
+            rendered = self._render_sessions(dials)
             items = [Item(text=str(d)) for d in dials]
         return RetrievalResult(
             items=items,
             rendered=rendered,
             metrics=CallMetrics(),
-            extra={"route": route, "oracle_quads": quads, "oracle_dials": dials,
+            extra={"route": route, "oracle_records": records, "oracle_dials": dials,
                    "q_kind": (e["q_kind"] if e else "")},
         )
 
-    def _retrieve_enhanced(self, question: Question,
+    def _retrieve_dual(self, question: Question,
                            current_session_idx: int) -> RetrievalResult:
-        """Enhanced oracle: gather **both** dialogue + quad and render with qa_enhanced (all, k unlimited).
+        """Dual oracle: gather **both** dialogue + records and render with qa_dual (all, k unlimited).
 
-        Same spirit as tkg_hybrid's enhanced (provide TKG quad + RAG dialogue together),
+        Same spirit as GroupChat-Mem's dual view (provide records + dialogue together),
         but oracle is a retrieval ceiling that injects the (GT) evidence of the oracle-
-        timestamp sessions directly instead of retrieving. k_tkg/k_rag = 0 (default)
+        timestamp sessions directly instead of retrieving. k_records/k_sessions = 0 (default)
         means all; >0 uses only the top-k (already sorted).
         """
         e = self._lookup_entry(question, current_session_idx)
-        quads = e["quads"] if e else []
+        records = e["records"] if e else []
         dials = e["dials"] if e else []
-        if self.k_tkg > 0:
-            quads = quads[: self.k_tkg]
-        if self.k_rag > 0:
-            dials = dials[: self.k_rag]
-        tkg_rendered = self._render_tkg(quads)
-        rag_rendered = self._render_rag(dials)
-        items = [Item(text=str(q)) for q in quads] + [Item(text=str(d)) for d in dials]
+        if self.k_records > 0:
+            records = records[: self.k_records]
+        if self.k_sessions > 0:
+            dials = dials[: self.k_sessions]
+        records_rendered = self._render_records(records)
+        sessions_rendered = self._render_sessions(dials)
+        items = [Item(text=str(q)) for q in records] + [Item(text=str(d)) for d in dials]
         return RetrievalResult(
             items=items,
-            # rendered is for compatibility (logging) — build_qa_prompt uses tkg/rag_rendered in extra.
-            rendered=tkg_rendered,
+            # rendered is for compatibility (logging) — build_qa_prompt uses records/sessions_rendered in extra.
+            rendered=records_rendered,
             metrics=CallMetrics(),
-            extra={"route": "ENHANCED", "tkg_rendered": tkg_rendered,
-                   "rag_rendered": rag_rendered, "oracle_quads": quads,
+            extra={"route": "DUAL", "records_rendered": records_rendered,
+                   "sessions_rendered": sessions_rendered, "oracle_records": records,
                    "oracle_dials": dials, "q_kind": (e["q_kind"] if e else "")},
         )
 
     def retrieve(self, question: Question, current_session_idx: int,
                  current_session: "Session | None" = None) -> RetrievalResult:
-        # enhanced: dialogue + quad both (bypasses route selection).
-        if self.enhanced:
-            return self._retrieve_enhanced(question, current_session_idx)
+        # dual: dialogue + records both (bypasses route selection).
+        if self.dual:
+            return self._retrieve_dual(question, current_session_idx)
         e = self._lookup_entry(question, current_session_idx)
         q_kind = (e["q_kind"] if e else "")
-        # quad_only → always TKG (quad); dialogue_only → always RAG (dialogue); else by q_kind.
-        if self.quad_only:
-            route = "TKG"
+        # records_only → always records; dialogue_only → always sessions; else by q_kind.
+        if self.records_only:
+            route = "RECORDS"
         elif self.dialogue_only:
-            route = "RAG"
+            route = "SESSIONS"
         else:
-            route = "TKG" if q_kind == "tkg" else "RAG"
+            route = "RECORDS" if q_kind == "records" else "SESSIONS"
         return self._retrieve_route(question, current_session_idx, route)
 
     def build_qa_prompt(self, question: Question, retrieval: RetrievalResult) -> str:
         q_str = render_question(question, self.question_format)
-        route = retrieval.extra.get("route", "RAG")
-        if route == "ENHANCED":
-            # qa_enhanced.txt: inject {question} + {triples} (quad) + {history} (dialogue) together.
+        route = retrieval.extra.get("route", "SESSIONS")
+        if route == "DUAL":
+            # qa_dual.txt: inject {question} + {triples} (records) + {history} (dialogue) together.
             return (
-                self._p_enhanced.replace("{question}", q_str)
-                .replace("{triples}", retrieval.extra.get("tkg_rendered") or "No relevant triple!")
-                .replace("{history}", retrieval.extra.get("rag_rendered") or "No relevant history!")
+                self._p_dual.replace("{question}", q_str)
+                .replace("{triples}", retrieval.extra.get("records_rendered") or "No relevant triple!")
+                .replace("{history}", retrieval.extra.get("sessions_rendered") or "No relevant history!")
             )
-        if route == "TKG":
-            return self._p_quad.replace("{question}", q_str).replace(
+        if route == "RECORDS":
+            return self._p_records.replace("{question}", q_str).replace(
                 "{triples}", retrieval.rendered or "No relevant triple!"
             )
-        return self._p_rag.replace("{question}", q_str).replace(
+        return self._p_sessions.replace("{question}", q_str).replace(
             "{history}", retrieval.rendered or "No relevant history!"
         )
 
     # ------------------------------------------------------------------
-    # answer — supports (E)-fallback (opposite modality), matching tkg_hybrid
+    # answer — supports (E)-fallback (opposite modality), matching GroupChat-Mem
     # ------------------------------------------------------------------
     def answer(
         self, question: Question, current_session_idx: int,
@@ -332,14 +328,14 @@ class OracleMemory(Memory):
         r1.extra["qa_final_prompt"] = prompt1
         r1.extra["qa_retrieval_rendered"] = r1.rendered
 
-        # If enhanced (dialogue+quad already provided together), fallback off, or not
+        # If dual (dialogue+records already provided together), fallback off, or not
         #   (E), finalize the first answer — enhanced has no opposite modality, so (E)-fallback is meaningless.
-        if self.enhanced or self.quad_only or not self.fallback or process_answer(gen1.text) != "(E)":
+        if self.dual or self.records_only or not self.fallback or process_answer(gen1.text) != "(E)":
             return gen1.text, r1, metrics
 
         # (E) → try once more with the opposite modality.
-        first_route = r1.extra.get("route", "RAG")
-        fb_route = "TKG" if first_route == "RAG" else "RAG"
+        first_route = r1.extra.get("route", "SESSIONS")
+        fb_route = "RECORDS" if first_route == "SESSIONS" else "SESSIONS"
         r2 = self._retrieve_route(question, current_session_idx, fb_route)
         # If the opposite modality is empty (no evidence), fallback is meaningless → keep the first answer.
         if not r2.items:

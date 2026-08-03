@@ -42,7 +42,7 @@ def get_clean_entity(entity: str) -> str:
 
     Enables case-insensitive matching and unifies spacing/hyphen/underscore/quote
     variants of a multi-word entity (e.g. "Paul the Wine Guy") into the same form.
-    Used by `tkg_hybrid._retrieve_tkg` for q_subj_nodes matching.
+    Used by the relational-memory retrieval for query-node matching.
     """
     return (
         entity.lower()
@@ -158,23 +158,23 @@ def process_answer(model_answer: str, options: list[str] | None = None) -> str:
 
 
 # ----------------------------------------------------------------------------
-# Quadruple validity
+# Record validity
 # ----------------------------------------------------------------------------
 _PRONOUNS = {"he", "his", "him", "she", "her", "i", "my", "me", "you", "your", "man", "woman"}
 
 
-def is_valid_quad(quad: dict | object) -> bool:
-    """Validity policy for a quadruple.
+def is_valid_record(record: dict | object) -> bool:
+    """Validity policy for a record.
 
-    1) Drop cyclic quads where head == tail.
-    2) Drop quads whose head or tail is a bare pronoun.
+    1) Drop cyclic records where head == tail.
+    2) Drop records whose head or tail is a bare pronoun.
     """
-    if isinstance(quad, dict):
-        head = quad.get("head", "")
-        tail = quad.get("tail", "")
+    if isinstance(record, dict):
+        head = record.get("head", "")
+        tail = record.get("tail", "")
     else:
-        head = getattr(quad, "head", "")
-        tail = getattr(quad, "tail", "")
+        head = getattr(record, "head", "")
+        tail = getattr(record, "tail", "")
     # If head/tail is an explicit None (e.g. LLM JSON null), .lower() would raise
     #   AttributeError and abort the whole commit. Coerce None/non-str to "".
     h, t = str(head or "").lower().strip(), str(tail or "").lower().strip()

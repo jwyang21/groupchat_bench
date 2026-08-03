@@ -1,6 +1,6 @@
 """BGE Reranker (BAAI/bge-reranker-v2-m3) wrapper.
 
-Re-ranks retrieved evidence (dialogue / quadruple) *right before building the QA prompt*.
+Re-ranks retrieved evidence (session / record) *right before building the QA prompt*.
 
 Design notes:
   - The reranker is a cross-encoder classifier (XLMRobertaForSequenceClassification), not a
