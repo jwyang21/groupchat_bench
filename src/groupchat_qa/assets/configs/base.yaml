@@ -10,6 +10,12 @@ llm:
   system_prompt: "You are a helpful assistant."
   temperature: 0.0
   top_p: 0.95
+  # Default output cap for short answers (e.g. multiple-choice letter, non-thinking models).
+  # For thinking-enabled runs, set max_tokens: 16384 in the per-experiment config
+  # (= reasoning budget 10000 + content headroom 6384); otherwise the reasoning trace is
+  # truncated and the answer is cut off. The run script also auto-raises max_tokens to
+  # (answer_budget + 6384) whenever a thinking_token_budget is configured, so per-experiment
+  # configs that set answer_budget already get >=16384 even if this default is left at 1000.
   max_tokens: 1000
 
 embedder:
@@ -31,4 +37,6 @@ eval:
 
 run:
   seed: 42
+  # Legacy default (unused by the runtime); the effective output cap is llm.max_tokens above.
+  # Same rule applies: use 16384 for thinking-enabled runs.
   num_max_tokens: 1000
