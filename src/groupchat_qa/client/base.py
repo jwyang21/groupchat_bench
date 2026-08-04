@@ -56,9 +56,7 @@ class LLM(ABC):
         self.extra_kwargs = kwargs
         self._chat = self._make_chat_model()
 
-    # ------------------------------------------------------------------
     # hooks the implementer must fill in
-    # ------------------------------------------------------------------
     @abstractmethod
     def _make_chat_model(self) -> "BaseChatModel":
         """Build a langchain `BaseChatModel` instance."""
@@ -72,9 +70,7 @@ class LLM(ABC):
         """
         ...
 
-    # ------------------------------------------------------------------
     # common API (record-bearing)
-    # ------------------------------------------------------------------
     def generate(self, user_prompt: str) -> GenerationRecord:
         """Free-form text generation. Measures latency + tokens per call automatically."""
         from langchain_core.messages import HumanMessage, SystemMessage

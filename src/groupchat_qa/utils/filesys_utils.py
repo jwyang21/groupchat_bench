@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 
-# ----------------------------------------------------------------------------
 # Local-first read-path resolution (optional shared-storage load reduction).
 #   If files on shared storage are pre-copied to a faster local disk, this hook can
 #   redirect reads to the local copy. Set GROUPCHAT_QA_SHARED_ROOT and
@@ -28,9 +27,7 @@ def local_first(fname: "str | Path") -> Path:
     return Path(fname)
 
 
-# ----------------------------------------------------------------------------
 # Pickle
-# ----------------------------------------------------------------------------
 def load_pickle(fname: str | Path) -> Any:
     # Load from the local copy if present (avoiding a shared-storage read). Only embedding
     # files are copied locally, so everything else falls back to the original.
@@ -62,9 +59,7 @@ def save_pickle(data: Any, fname: str | Path) -> None:
         raise
 
 
-# ----------------------------------------------------------------------------
 # YAML config
-# ----------------------------------------------------------------------------
 def load_yaml(fname: str | Path) -> dict:
     """Load a yaml file into a dict - simple fallback for environments without sconf."""
     import yaml
@@ -98,9 +93,7 @@ def load_config(
     return cfg
 
 
-# ----------------------------------------------------------------------------
 # Prompt loading
-# ----------------------------------------------------------------------------
 def load_prompt(prompt_name: str, prompt_dir: str | Path | None = None) -> str:
     """Read one prompt file from the prompt directory.
 

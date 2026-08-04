@@ -6,9 +6,7 @@ import re
 import numpy as np
 
 
-# ----------------------------------------------------------------------------
 # Cosine similarity
-# ----------------------------------------------------------------------------
 def cos_sim(vec1, vec2) -> float:
     """Cosine similarity between two vectors. Returns 0.0 for a zero vector."""
     v1 = np.asarray(vec1, dtype=np.float32)
@@ -24,9 +22,7 @@ def cos_sim(vec1, vec2) -> float:
     return sim if np.isfinite(sim) else 0.0
 
 
-# ----------------------------------------------------------------------------
 # String cleanup
-# ----------------------------------------------------------------------------
 def remove_quotes(text: str) -> str:
     """Remove quotes/backticks."""
     return text.replace("'", "").replace('"', "").replace("`", "")
@@ -54,9 +50,7 @@ def get_clean_entity(entity: str) -> str:
     )
 
 
-# ----------------------------------------------------------------------------
 # Multiple-choice response parsing
-# ----------------------------------------------------------------------------
 _OPTION_TOKENS = [
     "(A)", "(B)", "(C)", "(D)", "(E)",
     "(a)", "(b)", "(c)", "(d)", "(e)",
@@ -157,9 +151,7 @@ def process_answer(model_answer: str, options: list[str] | None = None) -> str:
     return out if len(out) <= 3 else ""
 
 
-# ----------------------------------------------------------------------------
 # Record validity
-# ----------------------------------------------------------------------------
 _PRONOUNS = {"he", "his", "him", "she", "her", "i", "my", "me", "you", "your", "man", "woman"}
 
 
@@ -185,9 +177,7 @@ def is_valid_record(record: dict | object) -> bool:
     return True
 
 
-# ----------------------------------------------------------------------------
 # Prompt instruction split
-# ----------------------------------------------------------------------------
 def extract_prompt_instruction(prompt: str, delimiter: str) -> str:
     """Return the part before the delimiter (instruction only)."""
     return prompt.split(delimiter)[0].strip()

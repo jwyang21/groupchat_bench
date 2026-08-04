@@ -76,9 +76,7 @@ from groupchat_qa.utils.mem0_scoring import (
 from .base import Memory
 
 
-# ============================================================================
 # pydantic schema - structured LLM response
-# ============================================================================
 class FactList(BaseModel):
     """Fact extraction response schema. Same as official mem0's {"facts": [...]}."""
     facts: list[str] = Field(default_factory=list, description="extracted salient facts")
@@ -116,9 +114,7 @@ class MemoryUpdatePlan(BaseModel):
     memory: list[MemoryOp] = Field(default_factory=list)
 
 
-# ============================================================================
 # Internal memory store
-# ============================================================================
 @dataclass
 class MemoryRecord:
     """A single unit of the memory store - text + embedding + metadata."""
@@ -161,9 +157,7 @@ class Mem0ExtractResult:
     metrics: CallMetrics
 
 
-# ============================================================================
 # Mem0Memory
-# ============================================================================
 class Mem0Memory(Memory):
     """Mem0 baseline - config dict keys:
 
@@ -219,9 +213,7 @@ class Mem0Memory(Memory):
         # re-tokenizing on every retrieve).
         self._p_qa_tokens = count_tokens(self._p_qa)
 
-    # ====================================================================
     # Internal helper - id issuance
-    # ====================================================================
     def _new_id(self) -> str:
         """Issue one new memory id - a monotonically increasing integer string that does not
         collide with existing ids."""
@@ -246,15 +238,13 @@ class Mem0Memory(Memory):
         """
         return hashlib.md5(text.encode("utf-8")).hexdigest()
 
-    # ====================================================================
     # commit - (1) fact extraction + (2) update phase
-    # ====================================================================
     def commit(self, session: Session) -> CallMetrics:
         """Single-call path (no 2-phase) - extract + commit_prepared in sequence (same result)."""
         ex = self.extract(session)
         return self.commit_prepared(session, ex)
 
-    # ----- phase 1: session-independent LLM/embedding (ThreadPool-parallel safe, store immutable) -----
+    # phase 1: session-independent LLM/embedding (ThreadPool-parallel safe, store immutable)
     def extract(self, session: "Session") -> "Mem0ExtractResult | None":
         """Split the session dialogue into chunks of turns_per_batch utterances and, per chunk,
         extract facts + embeddings (update-decision/apply are excluded - phase 2).
@@ -287,7 +277,7 @@ class Mem0Memory(Memory):
         # commit_prepared is a no-op.
         return Mem0ExtractResult(chunks=chunks, metrics=metrics)
 
-    # ----- phase 2: accumulating build (must be called sequentially in ascending session idx) -----
+    # phase 2: accumulating build (must be called sequentially in ascending session idx)
     def commit_prepared(
         self, session: "Session", extract_result: "Mem0ExtractResult | None"
     ) -> CallMetrics:
@@ -295,7 +285,7 @@ class Mem0Memory(Memory):
             return CallMetrics()  # empty session.
         metrics = extract_result.metrics  # inherit extract's fact-extraction + embed metrics.
 
-        # ---- (2) Update phase: process chunks in dialogue order, sequentially ----
+        # (2) Update phase: process chunks in dialogue order, sequentially
         # Per chunk: 1 cycle of (candidate search -> update-decision -> apply).
         #   - candidate-search query = that chunk's dialogue embedding (official parsed_messages -> chunk).
         #   - reads and writes self._store (accumulating), so chunks must be strictly sequential.
@@ -315,9 +305,7 @@ class Mem0Memory(Memory):
             self._apply_plan(plan, fact_to_emb, session, metrics)
         return metrics
 
-    # ====================================================================
     # Internal - fact extraction
-    # ====================================================================
     def _extract_facts_from_text(
         self, dialogue_text: str, date: str, metrics: CallMetrics
     ) -> list[str]:
@@ -345,9 +333,7 @@ class Mem0Memory(Memory):
         self._accumulate_gen(metrics, gen)
         return _parse_facts_json(gen.text)
 
-    # ====================================================================
     # Internal - update-decision
-    # ====================================================================
     def _decide_updates(
         self, old_memory: list[dict], new_facts: list[str], metrics: CallMetrics
     ) -> list[MemoryOp]:
@@ -378,9 +364,7 @@ class Mem0Memory(Memory):
         self._accumulate_gen(metrics, gen)
         return _parse_plan_json(gen.text)
 
-    # ====================================================================
     # Internal - apply plan (ADD / UPDATE / DELETE / NONE)
-    # ====================================================================
     def _apply_plan(
         self,
         plan: list[MemoryOp],
@@ -472,9 +456,7 @@ class Mem0Memory(Memory):
                 continue
             # Unknown event -> ignore (safe).
 
-    # ====================================================================
     # retrieve - dense similarity, future-leakage prevention
-    # ====================================================================
     def retrieve(self, question: Question, current_session_idx: int) -> RetrievalResult:
         metrics = CallMetrics()
         # Future-leakage prevention: only memories created in sessions before current_session_idx.
@@ -569,9 +551,7 @@ class Mem0Memory(Memory):
                 bm25_scores[str(r.id)] = normalize_bm25(float(raw), midpoint, steepness)
         return bm25_scores
 
-    # ====================================================================
     # build_qa_prompt
-    # ====================================================================
     def build_qa_prompt(self, question: Question, retrieval: RetrievalResult) -> str:
         q_str = render_question(question, self.question_format)
         evidence = retrieval.rendered or "No relevant memory!"
@@ -579,9 +559,7 @@ class Mem0Memory(Memory):
         # Apply the context_size token limit (<=0 = off/unlimited - same policy as GroupChat-Mem).
         return apply_token_limit(prompt, self.context_size)
 
-    # ====================================================================
     # answer - retrieve -> build prompt -> generate (same contract as GroupChat-Mem)
-    # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
         current_session: "Session | None" = None,
@@ -599,9 +577,7 @@ class Mem0Memory(Memory):
         result.extra["qa_retrieval_rendered"] = result.rendered
         return gen.text, result, metrics
 
-    # ====================================================================
     # snapshot / restore
-    # ====================================================================
     def snapshot(self, path: str) -> None:
         save_pickle(
             {
@@ -643,9 +619,7 @@ class Mem0Memory(Memory):
                 max_numeric = max(max_numeric, int(rid))
         self._next_id = max(next_id, max_numeric + 1)
 
-    # ====================================================================
     # Internal - embedding + similar-memory search + metrics accumulation
-    # ====================================================================
     def _embed(self, text: str, metrics: CallMetrics) -> np.ndarray:
         """Embed one text + record latency/count."""
         t0 = time.perf_counter()
@@ -691,9 +665,7 @@ class Mem0Memory(Memory):
         metrics.num_llm_calls += 1
 
 
-# ============================================================================
 # Module-level helpers
-# ============================================================================
 def _split_turns(dialogue: str) -> list[str]:
     """Split a session dialogue string into utterances (turns) - same rule as a_mem._split_turns.
 
@@ -710,9 +682,7 @@ def _split_turns(dialogue: str) -> list[str]:
     return [ln.strip() for ln in dialogue.splitlines() if ln.strip()]
 
 
-# ============================================================================
 # Module-level helpers - free-form JSON parsing (fallback when structured fails)
-# ============================================================================
 def _extract_json_blob(text: str) -> str:
     """Extract the first {...} JSON block from text (strips markdown fences etc.)."""
     s = text.strip()

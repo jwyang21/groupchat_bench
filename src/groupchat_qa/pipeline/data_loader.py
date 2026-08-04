@@ -47,9 +47,7 @@ from groupchat_qa.utils import (
 )
 
 
-# ============================================================================
 # cache budget directory branch
-# ============================================================================
 # A directory segment so that extraction caches per budget (route/query_node/triple/record + record
 # embeddings) can coexist within the same dataset tree. Instead of keeping a separate dataset_root
 # copy per budget, insert a single `bNNNNN` layer directly under the LLM folder of per-llm/common.
@@ -85,9 +83,7 @@ def _apply_budget(base: Path, cache_budget: int | str | None) -> Path:
     return base / seg if seg else base
 
 
-# ============================================================================
 # query node cache - file separation per K (num_query_nodes)
-# ============================================================================
 def query_node_filename(normalization: str, num_query_nodes: int | None = None) -> str:
     """query node cache file name. With K (num_query_nodes), split by K with a `_nq{K}` suffix.
 
@@ -508,7 +504,7 @@ def load_converted_dataset(
     """
     root = Path(dataset_root)
 
-    # === Layout handling (v1_2 entire dialogue == v1_3 entire dialogue) ===
+    # Layout handling (v1_2 entire dialogue == v1_3 entire dialogue)
     # For both v1_2 / v1_3:
     #   - root/date.json : list[str], len=N (per-session timestamp)
     #   - root/{data_type}/entire_session.json : list[str], len=N (per-session dialogue)
@@ -540,7 +536,7 @@ def load_converted_dataset(
             f"some sessions' dialogue_embedding=None triggers a live embed fallback. Re-run the conversion notebook."
         )
 
-    # === per-trial resources ===
+    # per-trial resources
     trial_dir = root / data_type / "precomputed" / "per-trial" / f"t{trial_idx}"
 
     qa_raw = _load_json_strict(trial_dir / "qa.json", f"{data_type}/precomputed/per-trial/t{trial_idx}/qa.json")
@@ -572,7 +568,7 @@ def load_converted_dataset(
     else:
         partial_emb = _load_emb(trial_dir, "partial_session_embedding")
 
-    # === Triple / route : per_llm_name branch ===
+    # Triple / route : per_llm_name branch
     per_llm_route: dict[int, str] | None = None
     per_llm_query_nodes: dict[int, list] = {}  # produced by the query-node precompute step (filled only in per_llm mode)
     if per_llm_name is not None:
@@ -626,7 +622,7 @@ def load_converted_dataset(
             _flatten_record_emb(load_pickle(local_first(partial_record_emb_path))) if partial_record_emb_path.exists() else None
         )
 
-    # === Session / Question mapping ===
+    # Session / Question mapping
     sessions: list[Session] = []
     questions: list[Question | None] = []
 
@@ -735,9 +731,7 @@ def load_converted_dataset(
     }
 
 
-# ============================================================================
 # v1.2.1 raw pickle loader - reproduce/data/{data_type}/{ie_type}/trial{N}.pickle
-# ============================================================================
 def load_v1_2_1_trial(
     pickle_path: Path | str,
 ) -> dict[str, Any]:
@@ -789,7 +783,7 @@ def load_v1_2_1_trial(
 
     n = len(d["idx"])
 
-    # === embedding extraction ===
+    # embedding extraction
     doc_emb_block = d.get("document_embedding") or {}
     q_emb_block = d.get("question_embedding") or {}
 
@@ -813,7 +807,7 @@ def load_v1_2_1_trial(
     if entire_emb is None and isinstance(doc_st, _np.ndarray) and len(doc_st) == n:
         entire_emb = doc_st.astype(_np.float32)
 
-    # === Session / Question mapping ===
+    # Session / Question mapping
     questioners = d.get("questioner", ["default"] * n)
     questions_text = d["question"]
     options_list = d["option"]
@@ -889,9 +883,7 @@ def load_v1_2_1_trial(
     }
 
 
-# ============================================================================
 # Deprecated - old direct pickle loader (v1_2 raw pickle). Alias kept for compatibility.
-# ============================================================================
 def load_trial(*args, **kwargs):
     """[DEPRECATED] Direct load of a v1_2 raw pickle. New code should use `load_converted_dataset`."""
     raise NotImplementedError(

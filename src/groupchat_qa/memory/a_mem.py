@@ -76,9 +76,7 @@ from groupchat_qa.utils import (
 from .base import Memory
 
 
-# ============================================================================
 # pydantic schema - structured LLM responses
-# ============================================================================
 class NoteAnalysis(BaseModel):
     """Response schema for note construction (analyze_content).
 
@@ -124,9 +122,7 @@ class QueryKeywords(BaseModel):
     keywords: str = Field(default="", description="search keywords for retrieval")
 
 
-# ============================================================================
 # MemoryNote - the basic unit of A-MEM (same fields as the official MemoryNote)
-# ============================================================================
 @dataclass
 class MemoryNote:
     """A single unit of the memory system. Holds the same metadata as the official A-MEM MemoryNote."""
@@ -172,9 +168,7 @@ class AMemExtractResult:
     metrics: CallMetrics
 
 
-# ============================================================================
 # AMemMemory
-# ============================================================================
 class AMemMemory(Memory):
     """A-MEM baseline - note construction + link generation + memory evolution.
 
@@ -279,9 +273,7 @@ class AMemMemory(Memory):
             self._session_snapshot_dir / "query_keywords.json"
             if self._session_snapshot_dir is not None else None)
 
-    # ====================================================================
     # commit - add one session as memory notes
-    # ====================================================================
     def commit(self, session: Session) -> CallMetrics:
         """Add each turn (utterance) of the session as a memory note (per turn: construction -> link -> evolution).
 
@@ -292,7 +284,7 @@ class AMemMemory(Memory):
         ex = self.extract(session)
         return self.commit_prepared(session, ex)
 
-    # ----- phase 1: session-independent LLM/embedding (ThreadPool-parallel safe, store immutable) -----
+    # phase 1: session-independent LLM/embedding (ThreadPool-parallel safe, store immutable)
     def extract(self, session: "Session") -> "AMemExtractResult | None":
         """Per turn (utterance): note construction (analyze_content) + content embedding (no link/evolution).
 
@@ -332,7 +324,7 @@ class AMemMemory(Memory):
             return None  # dialogue is whitespace only -> make no note.
         return AMemExtractResult(turns=turns, metrics=metrics)
 
-    # ----- phase 2: cumulative build (must be called in ascending session idx order) -----
+    # phase 2: cumulative build (must be called in ascending session idx order)
     def commit_prepared(
         self, session: "Session", extract_result: "AMemExtractResult | None"
     ) -> CallMetrics:
@@ -369,9 +361,7 @@ class AMemMemory(Memory):
             self._order.append(note.id)
         return metrics
 
-    # ====================================================================
     # per-session snapshot load - enhanced embedding without future leakage
-    # ====================================================================
     def _get_session_notes(self, snap_idx: int) -> "tuple[list[str], dict[str, MemoryNote]]":
         """[DEAD] retrieve no longer uses per-session snapshots
         (self._notes + orig rendering + session_idx filter achieve zero leakage). This method and
@@ -406,9 +396,7 @@ class AMemMemory(Memory):
                     self._snap_cache.popitem(last=False)  # FIFO evict (oldest = smallest idx)
             return cached
 
-    # ====================================================================
     # retrieve - dense top-k over notes from sessions below idx
-    # ====================================================================
     def _generate_query_keywords(self, question_text: str) -> str:
         """Official generate_query_llm (test_advanced.py L67-87) - question -> search keywords.
 
@@ -603,9 +591,7 @@ class AMemMemory(Memory):
             metrics=metrics,
         )
 
-    # ====================================================================
     # build_qa_prompt
-    # ====================================================================
     def build_qa_prompt(self, question: Question, retrieval: RetrievalResult) -> str:
         # render the question string per question_format (multi-structured etc.).
         q_str = render_question(question, self.question_format)
@@ -613,9 +599,7 @@ class AMemMemory(Memory):
         prompt = self._fill_qa_template(self._p_qa, q_str, evidence)
         return apply_token_limit(prompt, self.context_size)
 
-    # ====================================================================
     # answer - retrieve -> build prompt -> generate (same contract as GroupChat-Mem)
-    # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
         current_session: "Session | None" = None,
@@ -633,9 +617,7 @@ class AMemMemory(Memory):
         result.extra["qa_retrieval_rendered"] = result.rendered
         return gen.text, result, metrics
 
-    # ====================================================================
     # snapshot / restore
-    # ====================================================================
     def snapshot(self, path: str) -> None:
         payload = {
             "order": list(self._order),
@@ -700,9 +682,7 @@ class AMemMemory(Memory):
         self._order = order
         self._notes = notes
 
-    # ====================================================================
     # internal - note construction (analyze_content)
-    # ====================================================================
     def _run_with_timeout(self, fn, timeout_sec: float):
         """Run fn() in a daemon thread and raise TimeoutError if it does not finish within timeout_sec.
 
@@ -778,9 +758,7 @@ class AMemMemory(Memory):
             tags=list(data.get("tags", []) or []),
         )
 
-    # ====================================================================
     # internal - note embedding (official A-MEM enhanced: content+context+keywords+tags concat)
-    # ====================================================================
     def _embed_turn(self, text: str, metrics: CallMetrics):
         """Note embedding (official A-MEM enhanced document: text = content+context+keywords+tags concat).
 
@@ -795,9 +773,7 @@ class AMemMemory(Memory):
         metrics.num_embedding_calls += 1
         return np.asarray(vec, dtype=np.float32)
 
-    # ====================================================================
     # internal - link generation + memory evolution
-    # ====================================================================
     def _process_memory(self, note: MemoryNote, metrics: CallMetrics) -> None:
         """Find nearest neighbors for the new note and run link/evolution.
 
@@ -982,9 +958,7 @@ class AMemMemory(Memory):
             if i < len(new_contexts) and new_contexts[i]:
                 note.context = str(new_contexts[i])
 
-    # ====================================================================
     # internal - neighbor search / formatting
-    # ====================================================================
     def _nearest_neighbor_ids(self, note: MemoryNote, k: int) -> list[str]:
         """Return top-k ids by cosine similarity between the new note's embedding and existing notes."""
         if note.embedding is None:
@@ -1044,9 +1018,7 @@ class AMemMemory(Memory):
         return out
 
 
-# ============================================================================
 # Module-level helpers
-# ============================================================================
 def _coerce_int_list(raw: Any) -> list[int]:
     """Safely convert free-form fallback JSON's suggested_connections into list[int].
 

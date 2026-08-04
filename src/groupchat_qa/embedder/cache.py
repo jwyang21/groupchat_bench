@@ -66,12 +66,10 @@ from typing import Any, Iterable
 
 import numpy as np
 
-# ------------------------------------------------------------------
 # module-level threading lock (prevents in-process thread conflicts)
 # One RLock is shared per cache file path - even if the same path is created via multiple instances,
 # it is the same lock object. Multiple threads in ablation updating the same cache file concurrently
 # do not corrupt the in-memory dict.
-# ------------------------------------------------------------------
 _PATH_LOCKS: dict[str, threading.RLock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
 
@@ -139,9 +137,7 @@ class EmbeddingCache:
         self._readonly = False
         self._load_if_exists()
 
-    # ------------------------------------------------------------------
     # path helpers
-    # ------------------------------------------------------------------
     def _delta_glob_pat(self) -> str:
         # base file name followed by `.delta.*.pkl`. (never overlaps the base itself.)
         return self.path.name + ".delta.*.pkl"
@@ -163,9 +159,7 @@ class EmbeddingCache:
     def _compact_lock_path(self) -> Path:
         return self.path.with_name(f"{self.path.name}.compact.lock")
 
-    # ------------------------------------------------------------------
     # I/O - load
-    # ------------------------------------------------------------------
     def _validate_meta(self, meta: dict, src: str) -> bool:
         """Whether the file meta's model_name/dim matches this instance. False (skip) on mismatch."""
         try:
@@ -270,9 +264,7 @@ class EmbeddingCache:
             logging.debug(f"[EmbeddingCache] fcntl.flock failed (best-effort): {e}")
             return True  # the blocking path proceeds best-effort.
 
-    # ------------------------------------------------------------------
     # I/O - flush (write delta) / compact
-    # ------------------------------------------------------------------
     def _atomic_write_pickle(self, obj: dict, dest: Path) -> None:
         """Write obj to dest atomically (mkstemp + os.replace). dest must be a unique name to be safe."""
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -393,9 +385,7 @@ class EmbeddingCache:
                 except OSError:
                     pass
 
-    # ------------------------------------------------------------------
     # In-memory ops
-    # ------------------------------------------------------------------
     def get(self, text: str) -> np.ndarray | None:
         with self._lock:
             v = self._data.get(text)
@@ -425,9 +415,7 @@ class EmbeddingCache:
         with self._lock:
             return len(self._data)
 
-    # ------------------------------------------------------------------
     # High-level: batch embed missing only
-    # ------------------------------------------------------------------
     def embed_with_cache(
         self,
         embedder: Any,

@@ -48,17 +48,13 @@ class Memory(ABC):
         self.embedder = embedder
         self.cfg = cfg
 
-    # ------------------------------------------------------------------
     # Write side
-    # ------------------------------------------------------------------
     @abstractmethod
     def commit(self, session: Session) -> CallMetrics:
         """Write session info into memory. Returns metrics (if any LLM call was made)."""
         ...
 
-    # ------------------------------------------------------------------
     # Commit 2-phase parallelization hook (default = no-op split)
-    # ------------------------------------------------------------------
     def extract(self, session: Session) -> Any:
         """phase 1 - session-*independent* LLM extraction (read-only, accumulated store unchanged).
 
@@ -86,9 +82,7 @@ class Memory(ABC):
         """
         return self.commit(session)
 
-    # ------------------------------------------------------------------
     # Read side
-    # ------------------------------------------------------------------
     @abstractmethod
     def retrieve(self, question: Question, current_session_idx: int) -> RetrievalResult:
         """Return the context payload for the question."""
@@ -134,9 +128,7 @@ class Memory(ABC):
         result.extra.setdefault("route", getattr(self, "NAME", self.__class__.__name__))
         return gen.text, result, metrics
 
-    # ------------------------------------------------------------------
     # Fill QA prompt (shared) - unify evidence placeholders
-    # ------------------------------------------------------------------
     def _fill_qa_template(self, qa_template: str, q_str: str, evidence: str) -> str:
         """Fill the QA prompt's {question} + evidence placeholders.
 
@@ -155,9 +147,7 @@ class Memory(ABC):
             prompt = prompt.replace(ph, evidence)
         return prompt
 
-    # ------------------------------------------------------------------
     # Persistence
-    # ------------------------------------------------------------------
     @abstractmethod
     def snapshot(self, path: str) -> None:
         """Save the current memory state (e.g. via pickle)."""

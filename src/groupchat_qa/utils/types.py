@@ -9,10 +9,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-# ----------------------------------------------------------------------------
 # Record - the basic unit of the relational memory R: [subject, relation, object]
 # time-indexed by its source session.
-# ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Record:
     head: str
@@ -29,9 +27,7 @@ class Record:
         }
 
 
-# ----------------------------------------------------------------------------
 # Session - one dialogue session (dialogue + metadata)
-# ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Session:
     idx: int                          # 0-based session index
@@ -56,9 +52,7 @@ class Session:
     partial_embedding: Any | None = field(default=None, hash=False, compare=False, repr=False)
 
 
-# ----------------------------------------------------------------------------
 # Question - the multiple-choice question asked at the end of a session
-# ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Question:
     text: str
@@ -67,11 +61,9 @@ class Question:
     timestamp: str                    # when the question is asked (= session date)
     true_answer: str | None = None    # ground-truth label for evaluation
 
-    # ------------------------------------------------------------------
     # Optional per-question artifacts. The `prebuilt_prompt_*` fields are unused by
     # the live-retrieval pipeline (kept `None`); `route_label` / `hop_count` feed the
     # question-classifier routing when precomputed.
-    # ------------------------------------------------------------------
     prebuilt_prompt_sessions: str | None = None    # optional prebuilt session-view QA prompt
     prebuilt_prompt_records: str | None = None     # optional prebuilt record-view QA prompt
     prebuilt_prompt_no_history: str | None = None  # optional prebuilt no-history prompt
@@ -79,9 +71,7 @@ class Question:
     hop_count: int | None = None                   # 1 / 2 / -1 (fanquiz) question hop count
 
 
-# ----------------------------------------------------------------------------
 # Item - the generalized unit returned by Memory.retrieve
-# ----------------------------------------------------------------------------
 @dataclass
 class Item:
     text: str                         # canonical representation
@@ -89,9 +79,7 @@ class Item:
     score: float | None = None
 
 
-# ----------------------------------------------------------------------------
 # CallMetrics - metrics for LLM/embedder calls (collected on every call)
-# ----------------------------------------------------------------------------
 @dataclass
 class CallMetrics:
     latency_sec: float = 0.0
@@ -110,9 +98,7 @@ class CallMetrics:
         )
 
 
-# ----------------------------------------------------------------------------
 # RetrievalResult - wrapper returned by Memory.retrieve
-# ----------------------------------------------------------------------------
 @dataclass
 class RetrievalResult:
     items: list[Item] = field(default_factory=list)
@@ -121,9 +107,7 @@ class RetrievalResult:
     extra: dict[str, Any] = field(default_factory=dict)  # baseline-specific (route, query nodes, etc.)
 
 
-# ----------------------------------------------------------------------------
 # GenerationRecord - record-bearing wrapper returned by LLM.generate
-# ----------------------------------------------------------------------------
 @dataclass
 class GenerationRecord:
     text: str

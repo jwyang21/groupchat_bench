@@ -68,9 +68,7 @@ from groupchat_qa.utils import (
 from .base import Memory
 
 
-# ============================================================================
 # pydantic schema - structured LLM responses
-# ============================================================================
 class OpenIEResult(BaseModel):
     """OpenIE response schema - named entity list + triple list.
 
@@ -118,9 +116,7 @@ class FactFilterResult(BaseModel):
     )
 
 
-# ============================================================================
 # Graph store - phrase/passage nodes + 3 edge types
-# ============================================================================
 @dataclass
 class HippoGraphStore:
     """HippoRAG 2 in-memory knowledge graph + auxiliary indices.
@@ -149,7 +145,7 @@ class HippoGraphStore:
     # networkx graph holds fact/passage/synonym edges.
     graph: Any = field(default_factory=nx.Graph)
 
-    # ===== provenance indices - used to reconstruct PPR from past information only (fully block future leakage) =====
+    # provenance indices - used to reconstruct PPR from past information only (fully block future leakage)
     # per-session co-occurrence count of fact edges: (sorted phrase pair) -> {sess_idx: count}.
     #   at retrieve time, sum only counts with sess_idx < current to restore edge weight point-in-time-accurately.
     fact_edge_sessions: dict[tuple, dict] = field(default_factory=dict)
@@ -246,9 +242,7 @@ def _min_max_normalize(x: np.ndarray) -> np.ndarray:
     return (x - lo) / (hi - lo)
 
 
-# ============================================================================
 # HippoRAG2Memory
-# ============================================================================
 class HippoRAG2Memory(Memory):
     """HippoRAG 2 - OpenIE KG + recognition-memory filter + PPR retrieval.
 
@@ -319,9 +313,7 @@ class HippoRAG2Memory(Memory):
         if snap_path:
             self.restore(snap_path)
 
-    # ====================================================================
     # commit - OpenIE -> graph build
-    # ====================================================================
     def commit(self, session: Session) -> CallMetrics:
         """Single-call path (no 2-phase) - run extract + commit_prepared sequentially.
 
@@ -331,7 +323,7 @@ class HippoRAG2Memory(Memory):
         ex = self.extract(session)
         return self.commit_prepared(session, ex)
 
-    # ----- phase 1: session-independent LLM/embedding (ThreadPool-safe, store immutable) -----
+    # phase 1: session-independent LLM/embedding (ThreadPool-safe, store immutable)
     def extract(self, session: "Session") -> "HippoExtractResult | None":
         metrics = CallMetrics()
         if not session.dialogue:
@@ -361,7 +353,7 @@ class HippoRAG2Memory(Memory):
             metrics=metrics,
         )
 
-    # ----- phase 2: cumulative build (must be called sequentially in ascending session idx) -----
+    # phase 2: cumulative build (must be called sequentially in ascending session idx)
     def commit_prepared(
         self, session: "Session", extract_result: "HippoExtractResult | None"
     ) -> CallMetrics:
@@ -493,9 +485,7 @@ class HippoRAG2Memory(Memory):
 
         return metrics
 
-    # ====================================================================
     # OpenIE call (structured -> free-form fallback)
-    # ====================================================================
     def _openie(self, passage: str) -> tuple[list[str], list[list[str]], CallMetrics]:
         """passage -> (entities, triples, metrics).
 
@@ -605,9 +595,7 @@ class HippoRAG2Memory(Memory):
         entities, triples = _parse_openie_json(gen.text)
         return entities, triples, metrics
 
-    # ====================================================================
     # synonym edge build
-    # ====================================================================
     def _add_synonym_edges(self, new_phrase_keys: list[str]) -> None:
         """KNN between new phrase nodes and all phrase nodes -> synonym edge if sim >= threshold.
 
@@ -660,9 +648,7 @@ class HippoRAG2Memory(Memory):
                 self._store.synonym_weight[pair] = sim
                 cnt += 1
 
-    # ====================================================================
     # retrieve - fact scoring -> filter -> PPR
-    # ====================================================================
     def retrieve(self, question: Question, current_session_idx: int) -> RetrievalResult:
         metrics = CallMetrics()
 
@@ -789,7 +775,7 @@ class HippoRAG2Memory(Memory):
             metrics=metrics,
         )
 
-    # ----- filter (recognition memory) -----
+    # filter (recognition memory)
     def _filter_facts(
         self, question: str, cand_facts: list[tuple[str, str, str]]
     ) -> tuple[list[list[str]], CallMetrics]:
@@ -821,7 +807,7 @@ class HippoRAG2Memory(Memory):
         metrics.num_llm_calls += 1
         return _parse_filter_json(gen.text), metrics
 
-    # ----- build PPR seed -----
+    # build PPR seed
     def _build_seed(
         self,
         q_vec: np.ndarray,
@@ -898,7 +884,7 @@ class HippoRAG2Memory(Memory):
             seed[k] = seed.get(k, 0.0) + max(w, 0.0)
         return seed, linking_info
 
-    # ----- run PPR -----
+    # run PPR
     def _run_ppr(
         self, seed: dict[str, float], passage_keys: list[str], current_session_idx: int
     ) -> list[tuple[str, float]]:
@@ -976,7 +962,7 @@ class HippoRAG2Memory(Memory):
         scored.sort(key=lambda x: (-x[1], x[0]))
         return scored
 
-    # ----- dense passage fallback -----
+    # dense passage fallback
     def _dense_passage_fallback(
         self,
         question: Question,
@@ -1000,7 +986,7 @@ class HippoRAG2Memory(Memory):
             metrics=metrics,
         )
 
-    # ----- render passages -----
+    # render passages
     def _render_passages(
         self, ranked: list[tuple[str, float]]
     ) -> tuple[list[Item], str]:
@@ -1040,18 +1026,14 @@ class HippoRAG2Memory(Memory):
             approx += tk
         return items, rendered
 
-    # ====================================================================
     # build_qa_prompt
-    # ====================================================================
     def build_qa_prompt(self, question: Question, retrieval: RetrievalResult) -> str:
         q_str = render_question(question, self.question_format)
         evidence = retrieval.rendered or "No relevant history!"
         prompt = self._fill_qa_template(self._p_qa, q_str, evidence)
         return apply_token_limit(prompt, self.context_size)
 
-    # ====================================================================
     # answer - retrieve -> build prompt -> generate (same contract as GroupChat-Mem)
-    # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
         current_session: "Session | None" = None,
@@ -1069,9 +1051,7 @@ class HippoRAG2Memory(Memory):
         result.extra["qa_retrieval_rendered"] = result.rendered
         return gen.text, result, metrics
 
-    # ====================================================================
     # snapshot / restore
-    # ====================================================================
     def snapshot(self, path: str) -> None:
         s = self._store
         data = {
@@ -1160,9 +1140,7 @@ class HippoRAG2Memory(Memory):
         self._store = s
 
 
-# ============================================================================
 # Module-level helpers
-# ============================================================================
 def _parse_openie_json(text: str) -> tuple[list[str], list[list[str]]]:
     """Robustly parse named_entities + triples from a free-form LLM response."""
     entities: list[str] = []

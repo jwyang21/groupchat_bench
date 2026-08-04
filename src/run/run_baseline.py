@@ -318,7 +318,7 @@ def _commit_all_sessions(
                 logging.warning(f"[{llm_name}] extract cache save failed (idx={sess.idx}): {e}")
         return ex
 
-    # -- Resume: continue commit from the latest session checkpoint --
+    # Resume: continue commit from the latest session checkpoint
     #   When re-running a run whose commit_prepared (phase 2) was interrupted, restore the last saved
     #   session checkpoint (full snapshot) and continue committing from the next session. The snapshot
     #   is the entire accumulated store up to that point, so restoring only the single latest suffices
@@ -350,7 +350,7 @@ def _commit_all_sessions(
         return
     n_remaining = end - resume_from
 
-    # -- Phase 1: extract (session-independent LLM extraction + disk caching) --
+    # Phase 1: extract (session-independent LLM extraction + disk caching)
     # Store results in session-order slots (idx-start) - phase 2 consumes them in ascending order
     # regardless of completion order. On resume, extract only from resume_from (earlier session
     # extracts are unused in phase 2).
@@ -372,7 +372,7 @@ def _commit_all_sessions(
         for i in range(resume_from, end):
             extracts[i - start] = _extract_one(i)
 
-    # -- Phase 2: build (ascending session idx, sequential) + per-session checkpoint --
+    # Phase 2: build (ascending session idx, sequential) + per-session checkpoint
     #   Save a full snapshot at that point right after each session's commit_prepared.
     #   Even before commit finishes for all sessions, you can restore an arbitrary checkpoint to check
     #   intermediate QA performance over "sessions processed so far" (future leakage is blocked by
@@ -610,7 +610,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     qa_eval_mode = str(run_cfg.get("qa_eval_mode", "mcq")).lower()
     fuzzy_floor = float(run_cfg.get("fuzzy_floor", 0.0))
 
-    # -- Prepare per-session incremental save + resume after interruption --
+    # Prepare per-session incremental save + resume after interruption
     #   If result_json_path is set, this function owns that JSON file (load -> resume -> incremental
     #   save -> final merged save). Disabled (forced None) if commit_only (there are no records).
     _result_json_path = None if commit_only else result_json_path
@@ -793,7 +793,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     "latency_sec": metrics.latency_sec, "input_tokens": metrics.input_tokens,
                     "output_tokens": metrics.output_tokens, "num_llm_calls": metrics.num_llm_calls,
                 })
-                # ----------------------- legacy-style per-session log --
+                # legacy-style per-session log
                 logging.info(
                     "\n{Start answering question}\n"
                     "========================================\n"
@@ -845,7 +845,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     memory.llm = _commit_llm
 
     if commit_only:
-        # -- commit-only (snapshot build) mode - commit all sessions, save only the snapshot, skip QA --
+        # commit-only (snapshot build) mode - commit all sessions, save only the snapshot, skip QA
         #   If restored (snapshot already exists), skip commit too (already built). If snapshot_dir is
         #   unset, commit runs but there is nothing to save -> warn (the built result is discarded).
         if not restored:
@@ -878,7 +878,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         return {"summary": summary, "records": []}
 
     if answer_max_workers > 1:
-        # -- Phase 1: commit all (session order) - skip if restored/no_history --
+        # Phase 1: commit all (session order) - skip if restored/no_history
         if not _skip_commit:
             # commit 2-phase parallel (extract in parallel -> build sequential).
             _commit_all_sessions(memory, sessions, start, end, llm_name, commit_extract_workers,
@@ -891,7 +891,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     logging.info(f"[{llm_name}] memory snapshot saved -> {snapshot_path}")
                 except Exception as e:
                     logging.warning(f"[{llm_name}] snapshot save failed: {e}")
-        # -- Phase 2: answer in parallel (vLLM batching) --
+        # Phase 2: answer in parallel (vLLM batching)
         logging.info(f"[{llm_name}] answer parallel start (max_workers={answer_max_workers}, sessions={end - start})")
         done_cnt = 0
         with ThreadPoolExecutor(max_workers=answer_max_workers) as pool:
@@ -914,7 +914,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                 if _save_every and done_cnt % _save_every == 0:
                     _flush_result_json(complete=False)
     else:
-        # -- existing sequential (answer -> commit interleaved) - default, baseline-safe --
+        # existing sequential (answer -> commit interleaved) - default, baseline-safe
         for i in range(start, end):
             _, rec, m = _process_qa(i)
             results[i - start] = rec

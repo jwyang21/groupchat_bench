@@ -124,13 +124,11 @@ def parse_timestamp(timestamp: str) -> datetime:
     raise ValueError(f"Invalid timestamp format: {timestamp}")
 
 
-# ============================================================
 # For the "question embedding type" axis - generate the non-temporal question.
 #   - temporal     = embed the whole question
 #   - non_temporal = remove each timestamp plus the one time-preposition word before it
 #                    (on/in/by, ...) and strip. If the question has no timestamp, the result
 #                    equals the original question (non_temporal == temporal).
-# ============================================================
 # Time prepositions commonly preceding a timestamp; matched on word boundaries.
 # `at` is time/place ambiguous but included since time expressions like "at 1994" are common.
 _TIME_PREP_WORDS = (

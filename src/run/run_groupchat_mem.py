@@ -71,9 +71,7 @@ from groupchat_qa.utils import save_pickle, seed_everything, load_project_env
 load_project_env(start=__file__, override=True)
 
 
-# ============================================================================
 # Helpers
-# ============================================================================
 def _expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
     """Cartesian product of grid axes. Empty grid -> [{}] (= 1 combo, no override)."""
     if not grid: return [{}]
@@ -255,9 +253,7 @@ def _expected_scope_sessions(data_cfg: dict, session_filter: str) -> set[int] | 
     return {i for i in range(n) if ins(i)}
 
 
-# ============================================================================
 # Main runner
-# ============================================================================
 def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[str] | None = None,
                  grid_start: int = 0, grid_end: int | None = None,
                  rerun_missing: bool = False, rerun_scope: str = "config") -> dict[str, Any]:
@@ -361,7 +357,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
         for _f in as_completed(_hc_futures):
             _f.result()   # propagate exceptions
 
-    # ---- create the embedder only once ----
+    # create the embedder only once
     emb_cfg = method_cfg["embedder"]
     embedder = make_embedder(backend=emb_cfg["backend"], model=emb_cfg["model"])
 
@@ -379,7 +375,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
         embedder = CachedEmbedder(embedder, _cpath)
         logging.info(f"[ablation][embedder] file-backed cache enabled -> {_cpath}")
 
-    # ---- bundle cache (per (data_type, trial, ie_type, normalization, per_llm_name) tuple) ----
+    # bundle cache (per (data_type, trial, ie_type, normalization, per_llm_name) tuple)
     # A single shared_bundle load would silently ignore the grid's data.* axis sweep. Including
     # every data.* axis in the bundle cache key reloads the correct bundle per grid override
     # (no reload on cache hit).
@@ -804,7 +800,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
             except Exception as e:
                 logging.warning(f"[ablation] ckpt cleanup failed ({ckpt_path}): {e}")
 
-    # ---- parallel sweep + partial-failure cleanup ----
+    # parallel sweep + partial-failure cleanup
     max_workers = int(method_cfg.get("run", {}).get("parallel_max_workers", len(llms_list)))
     max_workers = max(1, min(max_workers, len(llms_list)))
     if max_workers == 1 or len(llms_list) == 1:
@@ -855,9 +851,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
     return summary
 
 
-# ============================================================================
 # CLI
-# ============================================================================
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="HP search entry: grid sweep for one method (multi-LLM parallel).",

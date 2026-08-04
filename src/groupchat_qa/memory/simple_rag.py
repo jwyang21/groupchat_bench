@@ -78,9 +78,7 @@ class SimpleRAGMemory(Memory):
         self._p_sessions = load_prompt(cfg.get("prompt_sessions") or _sess_prompt)
         self._p_no_hist = load_prompt(cfg.get("prompt_no_history") or _nohist_prompt)
 
-    # ------------------------------------------------------------------
     # Write side - store each session verbatim in S.
-    # ------------------------------------------------------------------
     def commit(self, session: Session) -> CallMetrics:
         metrics = CallMetrics()
         if not session.dialogue:
@@ -95,9 +93,7 @@ class SimpleRAGMemory(Memory):
         self._idx.add(session.dialogue, session.date, session.idx, vec)
         return metrics
 
-    # ------------------------------------------------------------------
     # Read side
-    # ------------------------------------------------------------------
     def retrieve(self, question: Question, current_session_idx: int,
                  current_session: "Session | None" = None) -> RetrievalResult:
         metrics = CallMetrics()
@@ -197,9 +193,7 @@ class SimpleRAGMemory(Memory):
         r.extra["qa_retrieval_rendered"] = r.rendered
         return gen.text, r, metrics
 
-    # ------------------------------------------------------------------
     # Persistence
-    # ------------------------------------------------------------------
     def snapshot(self, path: str) -> None:
         save_pickle(
             {

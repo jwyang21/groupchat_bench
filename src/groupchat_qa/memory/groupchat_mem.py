@@ -99,17 +99,13 @@ def _get_or_create_cache(
         return instance
 
 
-# ============================================================================
 # pydantic schema - structured LLM response for query-node identification
-# ============================================================================
 class QueryNodeList(BaseModel):
     """Response schema for query-node identification: a list of candidate node names."""
     subjects: list[str] = Field(description="query-relevant node name candidates")
 
 
-# ============================================================================
 # Helpers - KG / dialogue index
-# ============================================================================
 @dataclass
 class RelationalGraph:
     """Graph-structured relational memory R. Nested dict head -> relation -> timestamp ->
@@ -271,9 +267,7 @@ class DialogueIndex:
         return [i for i, _ in scored]
 
 
-# ============================================================================
 # GroupChatMem - dual-view memory (relational memory R + raw session repository S)
-# ============================================================================
 class GroupChatMem(Memory):
     """GroupChat-Mem: a dual-view memory that maintains a relational memory R
     (a graph of [subject, relation, object] records induced online from the
@@ -469,17 +463,13 @@ class GroupChatMem(Memory):
         self.record_embedding_type: str = _qet
         # question_embedding_type is set earlier (must run before the q_embed_path block references it).
 
-        # ====================================================================
         # 4 EmbeddingCache instances.
         # None if the cfg key is absent - live embed fallback (existing behavior).
-        # ====================================================================
         self._init_embedding_caches(cfg, embedder)
 
-    # ====================================================================
     # Embedding cache init - 4 kinds (entire_dialogue / partial_dialogue / question / record)
     # Required cfg keys: dataset_root, data_type, trial - cache disabled if absent (live embed fallback).
     # The record cache additionally needs llm_name + ie_type + normalization.
-    # ====================================================================
     def _init_embedding_caches(self, cfg: dict[str, Any], embedder: "Embedder") -> None:
         # Use module-level logging / Path (no function-local import).
         self._entire_dialogue_cache: EmbeddingCache | None = None
@@ -583,10 +573,8 @@ class GroupChatMem(Memory):
                     except (OSError, ValueError, RuntimeError):
                         pass
 
-    # ------------------------------------------------------------------
     # Common handling of empty text.
     # Return a uniform unit vec instead of a zero-vec -> avoids cos_sim ZeroDivisionError.
-    # ------------------------------------------------------------------
     def _empty_vec(self) -> np.ndarray:
         dim = self.embedder.dim
         v = np.ones(dim, dtype=np.float32)
@@ -717,9 +705,7 @@ class GroupChatMem(Memory):
             self._reranker = BGEReranker()
         return self._reranker
 
-    # ====================================================================
     # commit
-    # ====================================================================
     def commit(self, session: Session) -> CallMetrics:
         metrics = CallMetrics()
         # 1) accumulate the session's records into the relational memory R.
@@ -745,11 +731,9 @@ class GroupChatMem(Memory):
             self._idx.add(session.dialogue, session.date, session.idx, vec)
         return metrics
 
-    # ====================================================================
     # retrieve - dispatcher
     # current_session: the Session object of the current session. Needed so _retrieve_sessions can add
     # partial_dialogue + partial_embedding to the candidates. None -> entire only (legacy).
-    # ====================================================================
     def retrieve(self, question: Question, current_session_idx: int,
                  current_session: "Session | None" = None) -> RetrievalResult:
         """Retrieve evidence from both memory views (relational memory R and the raw
@@ -794,9 +778,7 @@ class GroupChatMem(Memory):
             current_session=current_session,
         )
 
-    # ================================================================
     # snapshot / restore
-    # ================================================================
     def snapshot(self, path: str) -> None:
         save_pickle(
             {
@@ -822,9 +804,7 @@ class GroupChatMem(Memory):
         self._idx.embeddings = [np.asarray(v, dtype=np.float32) for v in d["embeddings"]]
         self._idx._bm25 = None
 
-    # ====================================================================
     # internal - q_clf
-    # ====================================================================
     def _retrieve_sessions(self, question: Question, idx: int, route: str = "SESSIONS",
                        current_session: "Session | None" = None) -> RetrievalResult:
         """By design, scope = entire dialogues of the previous sessions + partial dialogue of the current session.
@@ -953,9 +933,7 @@ class GroupChatMem(Memory):
             return _alternate_merge(bm25_order, dense_order, bm25_first=self.bm25_first)
         raise ValueError(f"Unknown rag_method: {method!r}")
 
-    # ====================================================================
     # internal - obtain question embedding (precomputed first, else live embed)
-    # ====================================================================
     def _question_embedding(self, question: Question, metrics: "CallMetrics | None" = None):
         """Return the question's embedding vector. Prefer the precomputed map, fall back to embed_one if absent.
 
@@ -968,9 +946,7 @@ class GroupChatMem(Memory):
             metrics.num_embedding_calls += 1
         return q_vec
 
-    # ====================================================================
     # internal - relational memory R retrieval (two-hop traversal)
-    # ====================================================================
     def _retrieve_records(self, question: Question, idx: int, route: str = "RECORDS",
                       current_session: "Session | None" = None) -> RetrievalResult:
         timestamps = {t: {"type": classify_timestamp(t)} for t in extract_timestamps(question.text)}
@@ -1176,9 +1152,7 @@ class GroupChatMem(Memory):
             metrics=metrics,
         )
 
-    # ====================================================================
     # internal - enhanced retrieval (sessions top-k + records top-k simultaneously)
-    # ====================================================================
     def _retrieve_dual(self, question: Question, idx: int,
                             current_session: "Session | None" = None) -> RetrievalResult:
         sess = self._retrieve_sessions(question, idx, route="SESSIONS_in_dual",
@@ -1207,9 +1181,7 @@ class GroupChatMem(Memory):
             metrics=metrics,
         )
 
-    # ====================================================================
     # internal - traversal helpers (over-length guard + node resolution)
-    # ====================================================================
     def _cap_prompt(self, prompt: str) -> str:
         """Cap the input tokens of a traversal prompt so that input + output stays within
         the serving max-model-len (the front - instruction + question + records - is kept
@@ -1563,9 +1535,7 @@ class GroupChatMem(Memory):
         return result, raw_subjects, last_prompt
 
 
-# ============================================================================
 # Module-level helpers
-# ============================================================================
 def _query_node_one_batch(llm, prompt_template: str, question_text: str, questioner: str,
                       k: int, nodes_batch: list[str],
                       metrics: "CallMetrics | None" = None) -> tuple[list[str], str]:

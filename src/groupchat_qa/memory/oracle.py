@@ -116,9 +116,7 @@ class OracleMemory(Memory):
         self._lookup: dict[tuple, dict] = {}
         self._load_bundles(cfg)
 
-    # ------------------------------------------------------------------
     # Load bundles
-    # ------------------------------------------------------------------
     def _load_bundles(self, cfg: dict[str, Any]) -> None:
         ds_root = cfg.get("dataset_root")
         dt = cfg.get("data_type")
@@ -190,15 +188,11 @@ class OracleMemory(Memory):
                  or entry.get("oracle_dialogues_by_cosine") or [])
         return list(v)
 
-    # ------------------------------------------------------------------
     # Write side - oracle is precomputed, commit is a no-op.
-    # ------------------------------------------------------------------
     def commit(self, session: Session) -> CallMetrics:
         return CallMetrics()
 
-    # ------------------------------------------------------------------
     # Rendering - same format as GroupChat-Mem
-    # ------------------------------------------------------------------
     def _render_records(self, records: list) -> str:
         rendered, _ = _render_records_in_order(
             records, self.record_format, self.context_size, self._p_records
@@ -211,9 +205,7 @@ class OracleMemory(Memory):
         sep = f"\n{self.delimiter}\n"
         return sep.join(str(d) for d in dials)
 
-    # ------------------------------------------------------------------
     # Read side
-    # ------------------------------------------------------------------
     def _lookup_entry(self, question: Question, current_session_idx: int) -> dict | None:
         key = _entry_key(current_session_idx, question.text)
         e = self._lookup.get(key)
@@ -312,9 +304,7 @@ class OracleMemory(Memory):
             "{history}", retrieval.rendered or "No relevant history!"
         )
 
-    # ------------------------------------------------------------------
     # answer - supports (E)-fallback (opposite modality), matching GroupChat-Mem
-    # ------------------------------------------------------------------
     def answer(
         self, question: Question, current_session_idx: int,
         current_session: "Session | None" = None,
@@ -350,9 +340,7 @@ class OracleMemory(Memory):
         r2.extra["fallback_from"] = first_route
         return gen2.text, r2, metrics
 
-    # ------------------------------------------------------------------
     # Persistence - oracle has zero build cost (JSON load) -> no-op.
-    # ------------------------------------------------------------------
     def snapshot(self, path: str) -> None:
         # oracle has no accumulated state, so write only an empty marker (for snapshot/restore wiring compatibility).
         try:

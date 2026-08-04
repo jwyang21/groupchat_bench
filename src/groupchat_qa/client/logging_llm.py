@@ -91,9 +91,7 @@ class LoggingLLM:
                 except OSError:
                     pass
 
-    # ------------------------------------------------------------------
     # the two intercepted methods (everything the baseline calls)
-    # ------------------------------------------------------------------
     def generate(self, user_prompt: str):
         rec = self._base.generate(user_prompt)
         self._log("generate", None, user_prompt, rec, None)
@@ -108,9 +106,7 @@ class LoggingLLM:
         )
         return parsed, rec
 
-    # ------------------------------------------------------------------
     # all other attributes/methods delegate to base (model_name, system_prompt, _extract_usage, etc.)
-    # ------------------------------------------------------------------
     def __getattr__(self, name: str):
         # __getattr__ is only called when normal lookup fails. Prevent infinite recursion when
         # _base is unset (partial init / unpickle).
@@ -132,7 +128,6 @@ class LoggingLLM:
                 )
         return getattr(self._base, name)
 
-    # ------------------------------------------------------------------
     def _log(self, kind: str, schema: str | None, prompt: str, rec: Any, parsed: Any) -> None:
         parsed_dump: Any = None
         if parsed is not None:

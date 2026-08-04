@@ -98,9 +98,7 @@ class VLLMClient(LLM):
             out_tok = int(tu.get("completion_tokens", 0) or 0)
         return in_tok, out_tok
 
-    # ------------------------------------------------------------------
     # override : preserve reasoning_content via raw OpenAI HTTP
-    # ------------------------------------------------------------------
     def generate(self, user_prompt: str) -> GenerationRecord:
         """Free-form text generation. Preserves content + reasoning_content + latency + tokens.
 
@@ -157,9 +155,7 @@ class VLLMClient(LLM):
             reasoning_text=str(reasoning),
         )
 
-    # ------------------------------------------------------------------
     # override : structured responses via raw OpenAI client too - preserve reasoning_content
-    # ------------------------------------------------------------------
     def generate_structured(
         self,
         user_prompt: str,
