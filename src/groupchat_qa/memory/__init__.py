@@ -1,4 +1,4 @@
-"""Memory — memory method implementations."""
+"""Memory - memory method implementations."""
 from .base import Memory
 from .factory import make_memory
 

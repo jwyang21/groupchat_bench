@@ -13,7 +13,7 @@ Official algorithm (score_and_rank):
 Our adaptation (1:1 with the official _search_vector_store):
   - semantic = cosine similarity (official vector_store.search score).
   - bm25 raw = BM25Okapi.get_scores (replaces the official vector_store.keyword_search raw_score) -> normalize_bm25.
-  - entity_boosts = {} — our mem0 does not use graph memory, so there are no query_entities/graph
+  - entity_boosts = {} - our mem0 does not use graph memory, so there are no query_entities/graph
     (the official code also sets entity_boosts={} when there are no query_entities; has_entity=False -> max_possible=2.0).
   - threshold = 0.1 (official _search_vector_store default).
 """
@@ -41,7 +41,7 @@ def lemmatize_for_bm25(text: str) -> str:
         try:
             import spacy
 
-            # tagger/attribute_ruler suffice for lemmas — disable parser/ner for efficiency.
+            # tagger/attribute_ruler suffice for lemmas - disable parser/ner for efficiency.
             _NLP = spacy.load("en_core_web_sm", disable=["parser", "ner"])
         except Exception:
             _NLP = False  # load-failure marker -> always fall back to the original text.
@@ -57,7 +57,7 @@ def lemmatize_for_bm25(text: str) -> str:
         if lemma.isalnum():
             tokens.append(lemma)
         # If the surface form ends in -ing and differs from the lemma, also add the surface form
-        # (handles noun/verb ambiguity — as in the official code).
+        # (handles noun/verb ambiguity - as in the official code).
         if token.text.endswith("ing") and token.text != lemma and token.text.isalnum():
             tokens.append(token.text)
     return " ".join(tokens)

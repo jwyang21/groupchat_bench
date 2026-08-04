@@ -1,4 +1,4 @@
-"""Memory factory — instantiate a memory from `memory.name` in the config.
+"""Memory factory - instantiate a memory from `memory.name` in the config.
 
 To add a baseline: add one branch here and write `memory/<name>.py`.
 """
@@ -18,9 +18,9 @@ def make_memory(name: str, llm: LLM, embedder: Embedder, cfg: dict[str, Any]) ->
     Supported:
       - "groupchat_mem" : the proposed method (dual-view relational memory R + raw session repository S).
       - "simple_rag"    : Simple RAG / Direct QA reference baselines (BM25 or embedding retrieval; no-history).
-      - "a_mem"         : A-MEM — interlinked memory notes with dynamic linking/evolution.
-      - "hipporag2"     : HippoRAG 2 — OpenIE knowledge graph + Personalized PageRank retrieval.
-      - "mem0"          : Mem0 — fact extraction + add/update/delete consolidation, dense retrieval.
+      - "a_mem"         : A-MEM - interlinked memory notes with dynamic linking/evolution.
+      - "hipporag2"     : HippoRAG 2 - OpenIE knowledge graph + Personalized PageRank retrieval.
+      - "mem0"          : Mem0 - fact extraction + add/update/delete consolidation, dense retrieval.
       - "oracle"        : oracle upper bound (perfect retrieval + routing).
     """
     name = name.lower()

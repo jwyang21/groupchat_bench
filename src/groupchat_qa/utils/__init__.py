@@ -1,4 +1,4 @@
-"""Utils — helpers and shared types imported across multiple files."""
+"""Utils - helpers and shared types imported across multiple files."""
 from .types import (
     Record,
     Session,
@@ -32,7 +32,7 @@ from .timestamp_utils import (
 )
 from .format_converter import render_question, OPTION_LABELS
 from .env_utils import load_project_env, find_project_env
-# reranker uses heavy imports (transformers + torch), so it is loaded lazily —
+# reranker uses heavy imports (transformers + torch), so it is loaded lazily -
 # import it directly instead:
 #   from groupchat_qa.utils.reranker import BGEReranker
 

@@ -1,4 +1,4 @@
-"""Embedder ABC — text -> vector (unified provider interface)."""
+"""Embedder ABC - text -> vector (unified provider interface)."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,11 +10,11 @@ class Embedder(ABC):
     """Provider-agnostic embedding interface.
 
     Implementations:
-      - `OpenAIEmbedder` — text-embedding-3-small, etc.
-      - `SentenceTransformerEmbedder` — local ST models
+      - `OpenAIEmbedder` - text-embedding-3-small, etc.
+      - `SentenceTransformerEmbedder` - local ST models
 
     Design: for a fair baseline comparison, every method must be injected with the *same embedder
-    instance* — created only once based on `embedder.name` in config.
+    instance* - created only once based on `embedder.name` in config.
     """
 
     @property

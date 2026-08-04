@@ -1,4 +1,4 @@
-"""run_groupchat_mem.py — grid / resume entry point for the proposed groupchat-mem method.
+"""run_groupchat_mem.py - grid / resume entry point for the proposed groupchat-mem method.
 
 The config's top-level key is the method name, selected via `--method <name>` (use
 `groupchat_mem` for the clean configs). Each method section holds `llms` (list) +
@@ -7,7 +7,7 @@ The config's top-level key is the method name, selected via `--method <name>` (u
 Core policy:
 - `data.per_llm_precomputed: true` -> use per-LLM cache (per-llm/{llm} route/record cache + {ie_type}/...).
   On cache miss, raise FileNotFoundError immediately (assistant == QA model policy).
-- `data.session_filter`: all / even / odd (0-based — even = idx 0,2,4,...).
+- `data.session_filter`: all / even / odd (0-based - even = idx 0,2,4,...).
 - `data.data_type`: normal / newname / shuffled. `data.ie_type`: openie / closedie / gt.
   Set via yaml edit or sconf argv override (`--data.data_type newname`).
 
@@ -88,12 +88,12 @@ def _apply_overrides(base_cfg: dict, overrides: dict, default_target: str = "mem
     - "data.{key}"    -> data.{key}
     - "memory.{key}"  -> memory.{key}
     - "run.{key}"     -> run.{key}
-    - otherwise (no dot) -> default_target.{key}  (backward compat — default "memory")
+    - otherwise (no dot) -> default_target.{key}  (backward compat - default "memory")
     """
     # Use copy.deepcopy: a json round-trip would coerce int keys -> str, tuple -> list, and
     # silently lose non-JSON types (Path, datetime, set). Safe even if a nested dict value is present.
     out = copy.deepcopy(base_cfg)
-    # Guard against a typo creating an unknown section (silent fail) — whitelist known sections.
+    # Guard against a typo creating an unknown section (silent fail) - whitelist known sections.
     _KNOWN_SECTIONS = {"run", "data", "memory", "embedder", "llms"}
     for k, v in overrides.items():
         if k == "seed":
@@ -110,7 +110,7 @@ def _apply_overrides(base_cfg: dict, overrides: dict, default_target: str = "mem
 
 def _find_best(rows: list[dict]) -> dict | None:
     """Best accuracy across LLM x combo. Excludes error / n_sessions=0 rows.
-    On ties, prefer the cell with larger n_scored (or n_sessions) — avoids oversell where a
+    On ties, prefer the cell with larger n_scored (or n_sessions) - avoids oversell where a
     small sample's high accuracy wins."""
     if not rows: return None
     valid = [r for r in rows if not r.get("error") and r.get("n_sessions", 0) > 0]
@@ -132,7 +132,7 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
       that value, and if max_tokens is below answer_budget + 6384 (content headroom), raise it so
       the budget is not truncated by max_tokens.
 
-    Note: thinking_token_budget is meaningless for enable_thinking=false (non-thinking) models —
+    Note: thinking_token_budget is meaningless for enable_thinking=false (non-thinking) models -
     the server ignores it, but to avoid confusion we only overwrite the budget when
     enable_thinking=true.
     """
@@ -145,14 +145,14 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
     if ab <= 0:
         raise ValueError(f"qa.answer_budget must be a positive integer, got {ab}")
 
-    new_cfg = dict(llm_cfg)  # Shallow copy — rebuild only extra_body deeply (avoid mutating original).
+    new_cfg = dict(llm_cfg)  # Shallow copy - rebuild only extra_body deeply (avoid mutating original).
     extra_body = dict(new_cfg.get("extra_body") or {})
     ctk = dict(extra_body.get("chat_template_kwargs") or {})
     # Skip budget injection for models where enable_thinking is explicitly False (meaningless + confusing).
     if ctk.get("enable_thinking") is False:
         logging.warning(
             f"[ablation] qa.answer_budget={ab} set, but LLM "
-            f"{new_cfg.get('name', new_cfg.get('model_name', '?'))} has enable_thinking=false — "
+            f"{new_cfg.get('name', new_cfg.get('model_name', '?'))} has enable_thinking=false - "
             f"skipping budget injection."
         )
         return llm_cfg
@@ -164,7 +164,7 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
         logging.warning(
             f"[ablation] qa.answer_budget={ab} set, but LLM "
             f"{new_cfg.get('name', new_cfg.get('model_name', '?'))} is a reasoning_effort model "
-            f"(e.g., gpt-oss, no thinking_token_budget knob) — skipping budget injection."
+            f"(e.g., gpt-oss, no thinking_token_budget knob) - skipping budget injection."
         )
         return llm_cfg
     extra_body["thinking_token_budget"] = ab
@@ -181,19 +181,19 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
 def _write_grid_map(out_dir: Path, combos: list[dict]) -> None:
     """Save the grid_idx->combo mapping to out_dir/grid_map.json (once at run start).
     Lets you read straight from the result directory what each grid_NNN configures
-    (retrieval_method / top_k / etc.). Best-effort — failure does not stop the experiment
+    (retrieval_method / top_k / etc.). Best-effort - failure does not stop the experiment
     (grid_combo is also stored in each grid pkl summary). Ablation-specific (simulate has no
     grid concept, so no sync needed)."""
     try:
         gm = {str(i): dict(c) for i, c in enumerate(combos)}
-        # Atomic write (tmp+replace) — prevents partial reads even when several LLM procs share
+        # Atomic write (tmp+replace) - prevents partial reads even when several LLM procs share
         #   the same out_dir (as in top-k) and write concurrently (same combos -> same content).
         _tmp = out_dir / "grid_map.json.tmp"
         _tmp.write_text(json.dumps(gm, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
         os.replace(_tmp, out_dir / "grid_map.json")
         # Only grid_map.json is kept (no README). The grid_idx->combo mapping is read from
         #   grid_map.json plus each {llm}.grid_NNN.json's summary.grid_combo.
-    except Exception as e:  # noqa: BLE001 — best-effort, never abort the experiment
+    except Exception as e:  # noqa: BLE001 - best-effort, never abort the experiment
         logging.warning(f"[ablation] failed to write grid_map (ignored): {e}")
 
 
@@ -229,7 +229,7 @@ def _in_scope_fn(session_filter: str):
 
 
 def _dataset_n_sessions(data_cfg: dict) -> int | None:
-    """Total session count of the dataset (len of entire_session.json). Computed dynamically —
+    """Total session count of the dataset (len of entire_session.json). Computed dynamically -
     never hardcode a number like 394. Combined with session_filter this yields the "expected
     scored session count" independent of dataset (friends 788 -> even 394, bigbang 805 -> even 403,
     theoffice 2347 -> even 1174; all -> the full count). Returns None on load failure."""
@@ -349,7 +349,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
     out_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"[ablation] result_dir = {out_dir}")
 
-    # Auto-generate grid_map.json — read straight from the result directory what each grid_NNN
+    # Auto-generate grid_map.json - read straight from the result directory what each grid_NNN
     #   configures (grid_idx->combo). Written once at run start from the full grid definition (combos).
     _write_grid_map(out_dir, combos)
 
@@ -365,7 +365,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
     emb_cfg = method_cfg["embedder"]
     embedder = make_embedder(backend=emb_cfg["backend"], model=emb_cfg["model"])
 
-    # File-backed embedding cache — if `embedder.cache: true`, wrap the base embedder in
+    # File-backed embedding cache - if `embedder.cache: true`, wrap the base embedder in
     #   CachedEmbedder (lookup -> hit / miss embeds live and stores). Each text is embedded once
     #   and reused. Since the ablation grid may vary data_type, the cache lives at the dataset_root
     #   level (text-keyed, so mixing data_types is safe as keys differ + (model,dim) validated).
@@ -390,7 +390,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
         """Extract cache_budget from cfg_run.
 
         Priority: memory.cache_budget (explicit) -> None (= legacy single layout, backward-compat).
-        Budget-partitioned cache — no segment when unset.
+        Budget-partitioned cache - no segment when unset.
         """
         return (method_cfg_run.get("memory") or {}).get("cache_budget")
 
@@ -402,7 +402,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
             str(d_cfg.get("ie_type", "openie")),
             str(d_cfg.get("normalization", "raw")),
             per_llm_name,
-            # Include cache_budget in the key — reload the correct bundle if the grid varies budget
+            # Include cache_budget in the key - reload the correct bundle if the grid varies budget
             #   (prevents silent stale reuse).
             str(cache_budget),
         )
@@ -447,20 +447,20 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                              "total_input_tokens": 0, "total_output_tokens": 0, "wall_sec": 0,
                              "error": f"{type(e).__name__}: {e}"})
 
-    # answer budget — reasoning budget for the final QA inference (independent of cache budget).
+    # answer budget - reasoning budget for the final QA inference (independent of cache budget).
     #   If qa.answer_budget is unset, keep llm_cfg's thinking_token_budget (existing behavior).
     _answer_budget = (method_cfg.get("qa") or {}).get("answer_budget")
 
     def _run_one_llm_all_grids_inner(llm_cfg: dict, llm_name: str) -> None:
         # Create the LLM instance once (the LLM itself is grid-independent).
         # seed: inject run.seed as the request seed (reproducibility for temperature>0). Use base's
-        # run.seed (client created once outside the grid loop — run.seed is not a grid axis here).
-        # Inject the answer budget (original if unset) — changes only the answer-gen reasoning limit.
+        # run.seed (client created once outside the grid loop - run.seed is not a grid axis here).
+        # Inject the answer budget (original if unset) - changes only the answer-gen reasoning limit.
         _llm_cfg_eff = _apply_answer_budget(llm_cfg, _answer_budget)
         llm = _baseline._make_llm_from_cfg(_llm_cfg_eff, seed=int(base.get("run", {}).get("seed", 42)))
 
         for grid_idx, combo in enumerate(combos):
-            # Grid range split — process half the grids per proc for slow models to raise endpoint
+            # Grid range split - process half the grids per proc for slow models to raise endpoint
             #   utilization. grid_idx outside the range belongs to another proc, so skip.
             #   grid_idx / filenames follow enumerate to stay consistent.
             if grid_idx < grid_start or (grid_end is not None and grid_idx > grid_end):
@@ -468,7 +468,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
             with rows_lock:
                 counter["cur"] += 1
                 cur = counter["cur"]
-            # Wrap each grid body in try/except — one cell failing does not stop the rest.
+            # Wrap each grid body in try/except - one cell failing does not stop the rest.
             try:
                 # Skip-existing: skip if a result file already exists (preserve prior cell results).
                 # Results are saved as json only, so skip-existing prefers json but also honors a pkl
@@ -498,9 +498,9 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     _rs = str(rerun_scope or "config").lower()
                     _sf = _cfg_sf if _rs == "config" else ("all" if _rs == "entire" else _rs)
                     _in_scope = _in_scope_fn(_sf)
-                    # Missing sessions = expected (scope) sessions − already-scored sessions.
+                    # Missing sessions = expected (scope) sessions - already-scored sessions.
                     #   Expected sessions = range(dataset session count) matching session_filter
-                    #   (dynamic; never hardcode numbers like 394 — reused for other datasets:
+                    #   (dynamic; never hardcode numbers like 394 - reused for other datasets:
                     #   bigbang 403 / theoffice 1174 / all = full count). This makes both
                     #   (a) sessions with is_correct=None in records and (b) sessions absent from
                     #   records (crashed before reaching them) rerun targets (previously only (a)).
@@ -549,7 +549,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                                 #   relaunch would enter resume -> whack-a-mole (0 reprocessing yet
                                 #   launched repeatedly, rc never updated so stays False -> a completed
                                 #   cell keeps re-running). Using the same logic as rerun-missing,
-                                #   compute missing sessions (expected scope − scored scope); if 0,
+                                #   compute missing sessions (expected scope - scored scope); if 0,
                                 #   confirm completion (atomically mark rc=True) and skip. If any
                                 #   missing, resume as before (run_one_llm).
                                 _cfg_sf2 = str(method_cfg.get("data", {}).get("session_filter", "all")).lower()
@@ -575,7 +575,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     elif _pkl_file.exists():
                         _skip = True
                     if _skip:
-                        logging.info(f"[ablation] {method_name} {cur}/{total} llm={llm_name} grid={grid_idx} — already complete (file exists), skip")
+                        logging.info(f"[ablation] {method_name} {cur}/{total} llm={llm_name} grid={grid_idx} - already complete (file exists), skip")
                         continue
                     # Incomplete (resume_complete=False, missing sessions) partial result -> run_one_llm resumes.
 
@@ -587,7 +587,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
 
                 # Reload the bundle keyed on cfg_run["data"] (no reload on cache hit).
                 cfg_data = cfg_run.get("data", data_cfg)
-                # cache_budget — which reasoning budget the cache was extracted with (independent of
+                # cache_budget - which reasoning budget the cache was extracted with (independent of
                 #   the answer budget = llm_cfg.extra_body.thinking_token_budget).
                 _cache_budget = _cache_budget_of(cfg_run)
                 # no_history combo -> the per-llm record/route cache is unnecessary (answer uses only
@@ -605,7 +605,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 sf_this = cfg_data.get("session_filter", sess_filter)
                 if sf_this:
                     run_cfg["session_filter"] = sf_this
-                # Separate per-grid prompt logs — add a grid_NNN subdir to log_prompts_dir so multiple
+                # Separate per-grid prompt logs - add a grid_NNN subdir to log_prompts_dir so multiple
                 #   combos do not mix into the same {llm}.prompts.jsonl (each grid's prompts get a
                 #   distinct absolute path).
                 if run_cfg.get("log_prompts") and run_cfg.get("log_prompts_dir"):
@@ -623,13 +623,13 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 mem_cfg["normalization"] = cfg_data.get("normalization", "raw")
                 mem_cfg["embedder_model"] = method_cfg["embedder"]["model"]
                 # Pass so the record embedding cache is also read from the same budget segment
-                #   (mem_cfg["cache_budget"] is already present from cfg_run["memory"] — copied via
+                #   (mem_cfg["cache_budget"] is already present from cfg_run["memory"] - copied via
                 #    dict(cfg_run["memory"]) so re-injection is not required, but unify with _cache_budget).
                 mem_cfg["cache_budget"] = _cache_budget
                 # Inject precomputed query nodes (produced by the query-node precompute step, per_llm mode).
                 #   key = session_idx (= current_session_idx). If present, skip the query-node LLM call on
                 #   the record route.
-                # precomputed query nodes — load the per-grid nq{K} cache (K = num_query_nodes).
+                # precomputed query nodes - load the per-grid nq{K} cache (K = num_query_nodes).
                 #   bundle["query_nodes"] is loaded once per (llm, trial) and is K-independent (default file),
                 #   so when the grid varies num_query_nodes over 1/3/5/7/9, each must read its own
                 #   query_node_{norm}_nq{K}.json for the query-node count to actually change.
@@ -659,7 +659,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     mem_cfg["record_embeddings"] = _record_emb
 
                 logging.info(f"[ablation] {method_name} {cur}/{total} llm={llm_name} grid={grid_idx} combo={combo}")
-                # Add PID to the ckpt name — avoids ckpt collisions across concurrent sweep runs.
+                # Add PID to the ckpt name - avoids ckpt collisions across concurrent sweep runs.
                 ckpt_path = out_dir / f".ckpt.grid_{grid_idx:03d}.{llm_name}.pid{os.getpid()}.ckpt.pkl"
 
                 t0 = time.perf_counter()
@@ -683,12 +683,12 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 #   glacial theoffice job freezes n_scored until completion, and a kill loses reprocessed
                 #   work. Enabling incremental save (result_json_path+save_every+resume=True) is the fix,
                 #   but apply it only after unit-testing run_one_llm's resume+rerun_sessions behavior
-                #   (core save path — no unverified changes). TODO.
+                #   (core save path - no unverified changes). TODO.
                 wall = time.perf_counter() - t0
 
                 # rerun_missing mode: without changing the existing result json's structure/format,
                 #   replace only the missing session element values + recompute the records-derived
-                #   summary values. (Never alter the file structure/format — only fix error session
+                #   summary values. (Never alter the file structure/format - only fix error session
                 #   element values.)
                 if rerun_missing:
                     try:
@@ -790,7 +790,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                         "total_input_tokens": 0, "total_output_tokens": 0, "wall_sec": 0,
                         "error": f"{type(e).__name__}: {e}",
                     })
-                # The except branch also cleans up the ckpt — otherwise a failed cell's stale ckpt
+                # The except branch also cleans up the ckpt - otherwise a failed cell's stale ckpt
                 # would linger on disk forever (older code skipped cleanup via continue).
                 try:
                     if 'ckpt_path' in locals():
@@ -820,13 +820,13 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 for f in futures:
                     f.cancel()
                 logging.error(
-                    "[ablation] LLM thread failed — unstarted futures canceled. Running threads "
+                    "[ablation] LLM thread failed - unstarted futures canceled. Running threads "
                     "continue in the background (Python ThreadPoolExecutor limitation). That grid's "
                     "ckpt is preserved."
                 )
                 raise
 
-    # If CachedEmbedder, flush the cache to disk after all LLMs/grids finish — persist embeddings
+    # If CachedEmbedder, flush the cache to disk after all LLMs/grids finish - persist embeddings
     #   still in memory (autoflush-interval leftovers) so the next ablation run reuses them. (If a
     #   thread failure raised, autoflush already persisted most; leftovers are re-embedded next run.)
     if isinstance(embedder, CachedEmbedder):
@@ -845,7 +845,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
     }
     # ablation_summary.{pkl,json,tsv} are generated only on explicit request -> not by default.
     #   Each grid result is in {llm}.grid_NNN.json; the summary is printed to stdout below.
-    # Safety net — residual ckpt cleanup. PID filter protects concurrent sweeps' ckpts.
+    # Safety net - residual ckpt cleanup. PID filter protects concurrent sweeps' ckpts.
     pid_pat = f".ckpt.grid_*.pid{os.getpid()}.ckpt.pkl"
     for ckpt in out_dir.glob(pid_pat):
         try:

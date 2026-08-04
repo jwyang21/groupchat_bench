@@ -1,4 +1,4 @@
-"""Embedder — text -> vector."""
+"""Embedder - text -> vector."""
 from .base import Embedder
 from .cache import EmbeddingCache
 from .cached_embedder import CachedEmbedder

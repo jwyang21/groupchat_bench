@@ -1,4 +1,4 @@
-"""Anthropic client — langchain `ChatAnthropic` wrapper."""
+"""Anthropic client - langchain `ChatAnthropic` wrapper."""
 from __future__ import annotations
 
 from typing import Any

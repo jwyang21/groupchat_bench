@@ -1,4 +1,4 @@
-"""OpenAI client — langchain `ChatOpenAI` wrapper."""
+"""OpenAI client - langchain `ChatOpenAI` wrapper."""
 from __future__ import annotations
 
 from typing import Any
@@ -15,7 +15,7 @@ class OpenAIClient(LLM):
         # api_key resolution: if config passes the vLLM convention "EMPTY" (or an empty value),
         #   authentication against the official OpenAI endpoint fails with 401. To work without
         #   committing a secret key to config (git), fall back to the OPENAI_API_KEY env var when
-        #   the key is "EMPTY"/empty. (openai provider only — no effect on the vLLM path.)
+        #   the key is "EMPTY"/empty. (openai provider only - no effect on the vLLM path.)
         kwargs = dict(self.extra_kwargs)
         ak = kwargs.get("api_key")
         if not ak or str(ak).upper() == "EMPTY":
@@ -30,7 +30,7 @@ class OpenAIClient(LLM):
             temperature=self.temperature,
             top_p=self.top_p,
             max_tokens=self.max_tokens,
-            seed=self.seed,   # reproducibility — OpenAI also supports seed (None means not passed)
+            seed=self.seed,   # reproducibility - OpenAI also supports seed (None means not passed)
             **kwargs,
         )
 

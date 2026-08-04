@@ -1,18 +1,18 @@
-"""Memory ABC — common interface for all memory methods.
+"""Memory ABC - common interface for all memory methods.
 
 Design: only 4 methods are enforced so baselines can be compared fairly:
 
-  1. `commit(session)`              — called when a session ends (write-side).
-  2. `retrieve(question, idx)`      — called when a question arrives (read-side).
-  3. `snapshot(path)` / `restore(path)` — pickle save/load (absorbs build cost across repeated experiments).
+  1. `commit(session)`              - called when a session ends (write-side).
+  2. `retrieve(question, idx)`      - called when a question arrives (read-side).
+  3. `snapshot(path)` / `restore(path)` - pickle save/load (absorbs build cost across repeated experiments).
 
-Commit 2-phase parallelization (commit cost is the baseline bottleneck — e.g.
+Commit 2-phase parallelization (commit cost is the baseline bottleneck - e.g.
 HippoRAG2's sequential per-session OpenIE takes ~28h):
-  - `extract(session) -> Any`  — session-*independent* LLM extraction (read-only,
+  - `extract(session) -> Any`  - session-*independent* LLM extraction (read-only,
     never mutates self's accumulated store). The caller runs extract for all sessions
     in a ThreadPool (spread across the endpoint pool), then passes results to
     commit_prepared in session order.
-  - `commit_prepared(session, extract_result) -> CallMetrics` — takes the extract
+  - `commit_prepared(session, extract_result) -> CallMetrics` - takes the extract
     result and does the accumulated build (KG/note/memory). Any accumulation
     dependency (link/evolution/update-decision) must be done here sequentially so
     there is no temporal leakage.
@@ -60,7 +60,7 @@ class Memory(ABC):
     # Commit 2-phase parallelization hook (default = no-op split)
     # ------------------------------------------------------------------
     def extract(self, session: Session) -> Any:
-        """phase 1 — session-*independent* LLM extraction (read-only, accumulated store unchanged).
+        """phase 1 - session-*independent* LLM extraction (read-only, accumulated store unchanged).
 
         default: return None (no extraction step). If None, the caller knows
         commit_prepared falls back to plain commit(session). Baselines
@@ -68,7 +68,7 @@ class Memory(ABC):
         precomputed embeddings).
 
         This method is called in parallel from a ThreadPool, so it must never read
-        or write self's accumulated state (_store/_notes/_order/graph, etc.) — it
+        or write self's accumulated state (_store/_notes/_order/graph, etc.) - it
         must compute purely from the session dialogue/embedding input to stay
         thread-safe (no races). self.llm/self.embedder calls are thread-safe
         (RoundRobinLLM lock + EmbeddingCache lock).
@@ -76,7 +76,7 @@ class Memory(ABC):
         return None
 
     def commit_prepared(self, session: Session, extract_result: Any) -> CallMetrics:
-        """phase 2 — accumulated build from the extract result. Must be called *sequentially in ascending session idx*.
+        """phase 2 - accumulated build from the extract result. Must be called *sequentially in ascending session idx*.
 
         default: ignore extract_result and run commit(session) directly (compatible
         with memories that do not support 2-phase). Baselines override this to reuse
@@ -135,7 +135,7 @@ class Memory(ABC):
         return gen.text, result, metrics
 
     # ------------------------------------------------------------------
-    # Fill QA prompt (shared) — unify evidence placeholders
+    # Fill QA prompt (shared) - unify evidence placeholders
     # ------------------------------------------------------------------
     def _fill_qa_template(self, qa_template: str, q_str: str, evidence: str) -> str:
         """Fill the QA prompt's {question} + evidence placeholders.

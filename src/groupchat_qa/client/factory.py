@@ -1,4 +1,4 @@
-"""LLM factory — creates a client instance from the provider name in config."""
+"""LLM factory - creates a client instance from the provider name in config."""
 from __future__ import annotations
 
 from typing import Any

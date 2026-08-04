@@ -38,7 +38,7 @@ def remove_brackets(text: str) -> str:
 
 
 def get_clean_entity(entity: str) -> str:
-    """Normalize an entity — lowercase + remove whitespace/punctuation.
+    """Normalize an entity - lowercase + remove whitespace/punctuation.
 
     Enables case-insensitive matching and unifies spacing/hyphen/underscore/quote
     variants of a multi-word entity (e.g. "Paul the Wine Guy") into the same form.
@@ -88,7 +88,7 @@ def process_answer(model_answer: str, options: list[str] | None = None) -> str:
     """
     model_answer = model_answer or ""  # None guard (makes the .lower()/.strip() calls below safe).
     text = model_answer
-    # 1. Strong keyword split — segment after the last match.
+    # 1. Strong keyword split - segment after the last match.
     for kw in ("final answer is", "the answer is", "answer is", "answer:"):
         if kw in text.lower():
             text = text.lower().split(kw)[-1].strip()
@@ -106,26 +106,26 @@ def process_answer(model_answer: str, options: list[str] | None = None) -> str:
         if out:
             return out
     else:
-        # 4. Multi-option — take only the last (X) in the segment (not raw model_answer, to avoid reasoning-on bias).
+        # 4. Multi-option - take only the last (X) in the segment (not raw model_answer, to avoid reasoning-on bias).
         last = None
         for m in re.finditer(r"[\({][A-Ea-e][\)}]", segment):
             last = m.group(0)
         if last:
             return f"({last[1].upper()})"
 
-    # 5. Fallback — "Option A" / "answer is A" / single letter.
+    # 5. Fallback - "Option A" / "answer is A" / single letter.
     low = model_answer.lower()
     for letter in ("a", "b", "c", "d", "e"):
         for pat in (f"option {letter}", f"answer is {letter}", f"answer: {letter}"):
             if pat in low:
                 return f"({letter.upper()})"
 
-    # 6. Whole response is a bare single letter (e.g. "E", "E.", "B)", "(C") — case missed by token matching.
+    # 6. Whole response is a bare single letter (e.g. "E", "E.", "B)", "(C") - case missed by token matching.
     m_bare = re.fullmatch(r"\(?([A-Ea-e])[\)\.\:]?", model_answer.strip())
     if m_bare:
         return f"({m_bare.group(1).upper()})"
 
-    # 7. (when options given) Option-text matching — recover when the model output the option body / "I don't know" instead of a label.
+    # 7. (when options given) Option-text matching - recover when the model output the option body / "I don't know" instead of a label.
     if options:
         def _norm(s: str) -> str:
             return str(s).strip().lower().rstrip(". ")

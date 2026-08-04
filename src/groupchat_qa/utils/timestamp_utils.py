@@ -28,11 +28,11 @@ _PATTERN_MDY_FULL = re.compile(rf"^{_MONTH} \d{{1,2}}, \d{{4}}$")
 _PATTERN_MY_FULL = re.compile(rf"^{_MONTH} \d{{4}}$")
 
 # Date range: "Month D - [Month] D, YYYY" (same-month + cross-month), with a single trailing
-# year. The connector is only hyphen/en-dash/em-dash — word connectors like
+# year. The connector is only hyphen/en-dash/em-dash - word connectors like
 # "to"/"and" are excluded because they risk false matches in question prose (and the data uses hyphens only).
 _RANGE_PAT = re.compile(
     rf"\b(?P<m1>{_MONTHS_ALT})\s+(?P<d1>\d{{1,2}})(?:st|nd|rd|th)?"
-    r"\s*[-–—]\s*"
+    r"\s*[---]\s*"
     rf"(?:(?P<m2>{_MONTHS_ALT})\s+)?"
     r"(?P<d2>\d{1,2})(?:st|nd|rd|th)?"
     r"(?:,?\s*(?P<y>\d{4}))",
@@ -68,7 +68,7 @@ def extract_timestamps(q: str) -> list[str]:
     """Extract all timestamps from a question string.
 
     1) Match date ranges (fanquiz) first -> expand every included day into "Month D, Year".
-    2) Then match single patterns (month_day_year / month_year / year_only) — skip any that overlap a range span.
+    2) Then match single patterns (month_day_year / month_year / year_only) - skip any that overlap a range span.
     Overlap avoidance: process from the most specific pattern first, skipping matches that overlap an already-taken span.
     """
     used_spans: list[tuple[int, int]] = []
@@ -80,7 +80,7 @@ def extract_timestamps(q: str) -> list[str]:
         return False
 
     out: list[str] = []
-    # 1) Ranges first (most specific) — expand into individual days.
+    # 1) Ranges first (most specific) - expand into individual days.
     for m in _RANGE_PAT.finditer(q):
         if _overlap(m.span()):
             continue
@@ -103,7 +103,7 @@ def extract_timestamps(q: str) -> list[str]:
 
 
 def classify_timestamp(t: str) -> str:
-    """Classify a timestamp's type — 'month_day_year' / 'month_year' / 'year_only'.
+    """Classify a timestamp's type - 'month_day_year' / 'month_year' / 'year_only'.
 
     A day expanded from a range is in "Month D, Year" form, so it classifies as 'month_day_year'.
     """
@@ -125,7 +125,7 @@ def parse_timestamp(timestamp: str) -> datetime:
 
 
 # ============================================================
-# For the "question embedding type" axis — generate the non-temporal question.
+# For the "question embedding type" axis - generate the non-temporal question.
 #   - temporal     = embed the whole question
 #   - non_temporal = remove each timestamp plus the one time-preposition word before it
 #                    (on/in/by, ...) and strip. If the question has no timestamp, the result

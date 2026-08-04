@@ -1,6 +1,6 @@
 """dataclasses / common types shared across files.
 
-Design intent — collect only *data shapes* that depend on no directory under
+Design intent - collect only *data shapes* that depend on no directory under
 `src/groupchat_qa/`. ABCs (LLM, Memory, Embedder) live in their own module's `base.py`, not here.
 """
 from __future__ import annotations  # avoid runtime eval of tuple[X,...] | None (Python 3.9)
@@ -10,7 +10,7 @@ from typing import Any
 
 
 # ----------------------------------------------------------------------------
-# Record — the basic unit of the relational memory R: [subject, relation, object]
+# Record - the basic unit of the relational memory R: [subject, relation, object]
 # time-indexed by its source session.
 # ----------------------------------------------------------------------------
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class Record:
 
 
 # ----------------------------------------------------------------------------
-# Session — one dialogue session (dialogue + metadata)
+# Session - one dialogue session (dialogue + metadata)
 # ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Session:
@@ -57,7 +57,7 @@ class Session:
 
 
 # ----------------------------------------------------------------------------
-# Question — the multiple-choice question asked at the end of a session
+# Question - the multiple-choice question asked at the end of a session
 # ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Question:
@@ -80,7 +80,7 @@ class Question:
 
 
 # ----------------------------------------------------------------------------
-# Item — the generalized unit returned by Memory.retrieve
+# Item - the generalized unit returned by Memory.retrieve
 # ----------------------------------------------------------------------------
 @dataclass
 class Item:
@@ -90,7 +90,7 @@ class Item:
 
 
 # ----------------------------------------------------------------------------
-# CallMetrics — metrics for LLM/embedder calls (collected on every call)
+# CallMetrics - metrics for LLM/embedder calls (collected on every call)
 # ----------------------------------------------------------------------------
 @dataclass
 class CallMetrics:
@@ -111,7 +111,7 @@ class CallMetrics:
 
 
 # ----------------------------------------------------------------------------
-# RetrievalResult — wrapper returned by Memory.retrieve
+# RetrievalResult - wrapper returned by Memory.retrieve
 # ----------------------------------------------------------------------------
 @dataclass
 class RetrievalResult:
@@ -122,7 +122,7 @@ class RetrievalResult:
 
 
 # ----------------------------------------------------------------------------
-# GenerationRecord — record-bearing wrapper returned by LLM.generate
+# GenerationRecord - record-bearing wrapper returned by LLM.generate
 # ----------------------------------------------------------------------------
 @dataclass
 class GenerationRecord:

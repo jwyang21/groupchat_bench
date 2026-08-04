@@ -1,4 +1,4 @@
-"""Question format converter — render the same question/options in three ways.
+"""Question format converter - render the same question/options in three ways.
 
   - multi_structured : the default multiple-choice form (options A-E listed explicitly)
   - multi_unstructured: "{question} {opt_a}? {opt_b}? ... or {opt_e}?"

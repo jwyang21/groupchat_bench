@@ -28,7 +28,7 @@ class SentenceTransformerEmbedder(Embedder):
         return self._dim
 
     def embed(self, texts: list[str]) -> np.ndarray:
-        # empty input → encode may return shape (0,), violating the (N,D) contract → explicit (0,D).
+        # empty input -> encode may return shape (0,), violating the (N,D) contract -> explicit (0,D).
         if not texts:
             return np.zeros((0, self._dim), dtype=np.float32)
         vecs = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True)

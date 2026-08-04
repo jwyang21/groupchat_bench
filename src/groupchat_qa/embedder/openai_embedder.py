@@ -47,7 +47,7 @@ class OpenAIEmbedder(Embedder):
         return self._DIM_MAP.get(self.model, 1536)
 
     def embed(self, texts: list[str]) -> np.ndarray:
-        # empty input → explicit (0,D) (keeps the (N,D) contract, avoids an unnecessary API call).
+        # empty input -> explicit (0,D) (keeps the (N,D) contract, avoids an unnecessary API call).
         if not texts:
             return np.zeros((0, self.dim), dtype=np.float32)
         vecs = self._client.embed_documents(texts)

@@ -1,4 +1,4 @@
-"""HippoRAG 2 memory — OpenIE knowledge graph + Personalized PageRank retrieval.
+"""HippoRAG 2 memory - OpenIE knowledge graph + Personalized PageRank retrieval.
 
 Paper: "From RAG to Memory: Non-Parametric Continual Learning for Large Language Models"
        (arXiv 2502.14802, HippoRAG 2)
@@ -13,12 +13,12 @@ Core idea (faithfully ported from the official repo `src/hipporag/HippoRAG.py`):
       (passage + named_entities -> triples), mirroring the official ner.py and
       triple_extraction.py templates. openie_single_call=True falls back to 1-call.
     - Add two kinds of nodes to the (undirected) graph:
-        * phrase node  (entity-<text>)   — subject/object of a triple
-        * passage node (passage-<idx>)   — session dialogue chunk
+        * phrase node  (entity-<text>)   - subject/object of a triple
+        * passage node (passage-<idx>)   - session dialogue chunk
       Add three kinds of edges:
-        * fact edge    (phrase<->phrase)  — the (s,o) pair of a triple. weight = co-occurrence count.
-        * passage edge (passage->phrase)  — phrase appearing in the passage. weight = 1.0.
-        * synonym edge (phrase<->phrase)  — embedding cosine sim >= threshold. weight = sim.
+        * fact edge    (phrase<->phrase)  - the (s,o) pair of a triple. weight = co-occurrence count.
+        * passage edge (passage->phrase)  - phrase appearing in the passage. weight = 1.0.
+        * synonym edge (phrase<->phrase)  - embedding cosine sim >= threshold. weight = sim.
     - Store embeddings for both phrases and passages (for dense scoring).
 
   [online / retrieve]
@@ -69,10 +69,10 @@ from .base import Memory
 
 
 # ============================================================================
-# pydantic schema — structured LLM responses
+# pydantic schema - structured LLM responses
 # ============================================================================
 class OpenIEResult(BaseModel):
-    """OpenIE response schema — named entity list + triple list.
+    """OpenIE response schema - named entity list + triple list.
 
     Each triple is a 3-element [subject, predicate, object] list.
     """
@@ -86,7 +86,7 @@ class OpenIEResult(BaseModel):
 
 
 class NERResult(BaseModel):
-    """NER response schema — named entity list (official repo ner.py output format).
+    """NER response schema - named entity list (official repo ner.py output format).
 
     Output of the first OpenIE stage (NER). Its entities feed the second stage
     (triple extraction).
@@ -97,9 +97,9 @@ class NERResult(BaseModel):
 
 
 class TripleResult(BaseModel):
-    """Triple extraction response schema — triple list (official repo triple_extraction.py output).
+    """Triple extraction response schema - triple list (official repo triple_extraction.py output).
 
-    Output of the second OpenIE stage — generated from passage + NER entities.
+    Output of the second OpenIE stage - generated from passage + NER entities.
     """
     triples: list[list[str]] = Field(
         default_factory=list,
@@ -108,7 +108,7 @@ class TripleResult(BaseModel):
 
 
 class FactFilterResult(BaseModel):
-    """Recognition-memory filter response schema — list of relevant facts kept.
+    """Recognition-memory filter response schema - list of relevant facts kept.
 
     Each fact is a 3-element [subject, predicate, object] list.
     """
@@ -119,7 +119,7 @@ class FactFilterResult(BaseModel):
 
 
 # ============================================================================
-# Graph store — phrase/passage nodes + 3 edge types
+# Graph store - phrase/passage nodes + 3 edge types
 # ============================================================================
 @dataclass
 class HippoGraphStore:
@@ -136,10 +136,10 @@ class HippoGraphStore:
     passage_date: dict[str, str] = field(default_factory=dict)
     passage_sess_idx: dict[str, int] = field(default_factory=dict)
     passage_emb: dict[str, np.ndarray] = field(default_factory=dict)
-    # fact: (s, p, o) tuple — target of dense scoring. index-aligned with fact_emb.
+    # fact: (s, p, o) tuple - target of dense scoring. index-aligned with fact_emb.
     facts: list[tuple[str, str, str]] = field(default_factory=list)
     fact_emb: list[np.ndarray] = field(default_factory=list)
-    # session index each fact was extracted from (index-aligned with facts) — blocks future-session facts at retrieve time.
+    # session index each fact was extracted from (index-aligned with facts) - blocks future-session facts at retrieve time.
     fact_sess_idx: list[int] = field(default_factory=list)
     # phrase key -> set of passage keys where the phrase appears (paper's ent_node_to_chunk_ids)
     phrase_to_passages: dict[str, set] = field(default_factory=dict)
@@ -149,7 +149,7 @@ class HippoGraphStore:
     # networkx graph holds fact/passage/synonym edges.
     graph: Any = field(default_factory=nx.Graph)
 
-    # ===== provenance indices — used to reconstruct PPR from past information only (fully block future leakage) =====
+    # ===== provenance indices - used to reconstruct PPR from past information only (fully block future leakage) =====
     # per-session co-occurrence count of fact edges: (sorted phrase pair) -> {sess_idx: count}.
     #   at retrieve time, sum only counts with sess_idx < current to restore edge weight point-in-time-accurately.
     fact_edge_sessions: dict[tuple, dict] = field(default_factory=dict)
@@ -163,7 +163,7 @@ class HippoGraphStore:
 
 @dataclass
 class HippoExtractResult:
-    """Output of phase 1 (extract) of the 2-phase commit — session-independent LLM/embedding result.
+    """Output of phase 1 (extract) of the 2-phase commit - session-independent LLM/embedding result.
 
     The cumulative store (graph/facts/phrase) is mutated only in phase 2 (commit_prepared).
     extract never reads/writes self._store, so it is safe for ThreadPool parallelism.
@@ -175,22 +175,22 @@ class HippoExtractResult:
 
 
 def _phrase_key(text: str) -> str:
-    """phrase node key — lower-cased normalized text with prefix."""
+    """phrase node key - lower-cased normalized text with prefix."""
     return "entity-" + text.strip().lower()
 
 
 def _passage_key(sess_idx: int) -> str:
-    """passage node key — based on session index."""
+    """passage node key - based on session index."""
     return f"passage-{sess_idx}"
 
 
 def _format_hippo_chunk(text: str, date: str, sess_idx: int) -> str:
-    """Render a retrieved passage into a QA prompt {history} chunk — including a timestamp header.
+    """Render a retrieved passage into a QA prompt {history} chunk - including a timestamp header.
 
     The hipporag2_qa.txt EXAMPLE gives each History entry a timestamp
     ([Date: ..., Session N]), so the actual rendering includes the timestamp too.
     The format matches the system-wide convention (GroupChat-Mem `_format_dialogue_chunk`):
-    "[Date: {date} (Session {sess_idx})]" — unifying the history format the model sees.
+    "[Date: {date} (Session {sess_idx})]" - unifying the history format the model sees.
     If date is empty, "[Date:  (Session N)]" would result, so only Session is shown.
     """
     if date:
@@ -205,7 +205,7 @@ def _cosine_matvec(mat: np.ndarray, vec: np.ndarray) -> np.ndarray:
 
     The official repo unit-normalizes embeddings and computes cosine via dot product.
     The embedder does not guarantee unit norm, so we normalize here.
-    Zero-norm rows/vectors are treated as 0.0 (prevents NaN — edge case).
+    Zero-norm rows/vectors are treated as 0.0 (prevents NaN - edge case).
     """
     mat = np.asarray(mat, dtype=np.float64)
     vec = np.asarray(vec, dtype=np.float64)
@@ -224,10 +224,10 @@ def _cosine_matvec(mat: np.ndarray, vec: np.ndarray) -> np.ndarray:
 
 
 def _min_max_normalize(x: np.ndarray) -> np.ndarray:
-    """Same as the official repo's min_max_normalize — scale to 0~1.
+    """Same as the official repo's min_max_normalize - scale to 0~1.
 
     Non-finite (NaN/inf) values are replaced with 0 before normalization (prevents NaN
-    propagation from e.g. zero-norm embeddings — edge case). Not in the official repo
+    propagation from e.g. zero-norm embeddings - edge case). Not in the official repo
     but a safety net.
     """
     x = np.asarray(x, dtype=np.float64)
@@ -250,25 +250,25 @@ def _min_max_normalize(x: np.ndarray) -> np.ndarray:
 # HippoRAG2Memory
 # ============================================================================
 class HippoRAG2Memory(Memory):
-    """HippoRAG 2 — OpenIE KG + recognition-memory filter + PPR retrieval.
+    """HippoRAG 2 - OpenIE KG + recognition-memory filter + PPR retrieval.
 
-    config dict keys (all optional — defaults are the official repo BaseConfig values):
-      synonymy_sim_threshold : float — synonym edge sim threshold (default 0.8)
-      synonymy_topk          : int   — KNN synonym candidates per phrase (default 2047, official repo)
-      linking_top_k          : int   — #candidate facts passed to filter + #PPR seed phrases (default 5)
-      passage_node_weight    : float — passage seed weight multiplier (default 0.05)
-      damping                : float — PPR damping factor (default 0.5)
-      num_retrieved          : int   — #passages returned (default 5; 0 or None -> 5)
-      context_size           : int   — final QA prompt token limit (default 0 = off/unlimited; >0 = upper bound)
-      use_filter             : bool  — use the recognition-memory LLM filter (default True)
-      openie_single_call     : bool  — if True, 1-call OpenIE (prompt_openie). **default True**
+    config dict keys (all optional - defaults are the official repo BaseConfig values):
+      synonymy_sim_threshold : float - synonym edge sim threshold (default 0.8)
+      synonymy_topk          : int   - KNN synonym candidates per phrase (default 2047, official repo)
+      linking_top_k          : int   - #candidate facts passed to filter + #PPR seed phrases (default 5)
+      passage_node_weight    : float - passage seed weight multiplier (default 0.05)
+      damping                : float - PPR damping factor (default 0.5)
+      num_retrieved          : int   - #passages returned (default 5; 0 or None -> 5)
+      context_size           : int   - final QA prompt token limit (default 0 = off/unlimited; >0 = upper bound)
+      use_filter             : bool  - use the recognition-memory LLM filter (default True)
+      openie_single_call     : bool  - if True, 1-call OpenIE (prompt_openie). **default True**
                                        (this project's HippoRAG2 default = 1-call).
                                        Only when explicitly False, use the official 2-call (prompt_ner -> prompt_triple).
-      question_format        : str   — multi_structured / multi_unstructured / open_ended
+      question_format        : str   - multi_structured / multi_unstructured / open_ended
       prompt_ner/triple      : official 2-call OpenIE prompt filenames (when used)
       prompt_openie          : 1-call OpenIE prompt (only when openie_single_call=True)
       prompt_filter/qa       : prompt filenames (relative to assets/prompt/)
-      hipporag2_snapshot     : str | None — prebuilt graph pickle path (restored if present)
+      hipporag2_snapshot     : str | None - prebuilt graph pickle path (restored if present)
     """
 
     NAME = "hipporag2"
@@ -285,7 +285,7 @@ class HippoRAG2Memory(Memory):
 
         # retrieval parameters
         # If linking_top_k <= 0, fact candidates are truncated to 0 (k=min(...) in retrieve),
-        #   so every question silently falls back to DPR — measuring DPR rather than the PPR
+        #   so every question silently falls back to DPR - measuring DPR rather than the PPR
         #   baseline. Force a minimum of 1 to guard against unintended 0/negative config.
         self.linking_top_k = max(1, int(cfg.get("linking_top_k", 5)))
         self.passage_node_weight = float(cfg.get("passage_node_weight", 0.05))
@@ -305,7 +305,7 @@ class HippoRAG2Memory(Memory):
         #   - official (only when openie_single_call: false): hipporag2_ner.txt (NER) + hipporag2_triple.txt (triple), 2-call.
         self._p_ner = load_prompt(cfg.get("prompt_ner", "hipporag2_ner.txt"))
         self._p_triple = load_prompt(cfg.get("prompt_triple", "hipporag2_triple.txt"))
-        # 1-call OpenIE prompt (project default — used when openie_single_call=True).
+        # 1-call OpenIE prompt (project default - used when openie_single_call=True).
         self._p_openie = load_prompt(cfg.get("prompt_openie", "hipporag2_openie.txt"))
         self._p_filter = load_prompt(cfg.get("prompt_filter", "hipporag2_filter.txt"))
         self._p_qa = load_prompt(cfg.get("prompt_qa", "hipporag2_qa.txt"))
@@ -314,16 +314,16 @@ class HippoRAG2Memory(Memory):
 
         self.question_format = cfg.get("question_format", "multi_structured")
 
-        # prebuilt graph snapshot (optional) — restore immediately if present.
+        # prebuilt graph snapshot (optional) - restore immediately if present.
         snap_path = cfg.get("hipporag2_snapshot")
         if snap_path:
             self.restore(snap_path)
 
     # ====================================================================
-    # commit — OpenIE → graph build
+    # commit - OpenIE -> graph build
     # ====================================================================
     def commit(self, session: Session) -> CallMetrics:
-        """Single-call path (no 2-phase) — run extract + commit_prepared sequentially.
+        """Single-call path (no 2-phase) - run extract + commit_prepared sequentially.
 
         Result/metrics are 100% identical to the 2-phase path (same internal logic reused).
         Works as-is for callers that only use commit(session) (e.g. the sequential path).
@@ -337,11 +337,11 @@ class HippoRAG2Memory(Memory):
         if not session.dialogue:
             return None  # empty session -> commit_prepared is a no-op.
 
-        # 1) OpenIE — extract named entities + triples (one LLM call). store unchanged.
+        # 1) OpenIE - extract named entities + triples (one LLM call). store unchanged.
         entities, triples, ie_metrics = self._openie(session.dialogue)
         metrics = metrics.merge(ie_metrics)
 
-        # 2) passage embedding — reuse the value injected by data_loader, else live-embed.
+        # 2) passage embedding - reuse the value injected by data_loader, else live-embed.
         #   If the injected value is an empty list / wrong dimension, it would be stored with
         #   (0,) shape and raise ValueError in retrieve's cos_sim / np.stack. Trust it only
         #   when 1-D and non-empty; otherwise live-embed.
@@ -366,7 +366,7 @@ class HippoRAG2Memory(Memory):
         self, session: "Session", extract_result: "HippoExtractResult | None"
     ) -> CallMetrics:
         if extract_result is None:
-            return CallMetrics()  # empty session — nothing to build.
+            return CallMetrics()  # empty session - nothing to build.
         # Carry over and accumulate extract's metrics (OpenIE LLM + passage embed).
         metrics = extract_result.metrics
         entities = extract_result.entities
@@ -401,7 +401,7 @@ class HippoRAG2Memory(Memory):
             phrases_in_passage.add(key)
             return key
 
-        # 3-a) fact edge (phrase<->phrase) — the (s, o) pair of a triple.
+        # 3-a) fact edge (phrase<->phrase) - the (s, o) pair of a triple.
         for tri in triples:
             if len(tri) != 3:
                 continue
@@ -413,7 +413,7 @@ class HippoRAG2Memory(Memory):
             o_key = _register_phrase(o)
             if s_key is None or o_key is None:
                 continue
-            # drop self-loop facts (s/o are the same phrase after normalization) — avoids PPR
+            # drop self-loop facts (s/o are the same phrase after normalization) - avoids PPR
             # distortion from networkx self-loops + double-counting the same phrase in _build_seed.
             if s_key == o_key:
                 continue
@@ -427,7 +427,7 @@ class HippoRAG2Memory(Memory):
             o_clean = self._store.phrase_text[o_key].lower()
             # store fact (for dense scoring). text unified to lower-case (official repo text_processing).
             self._store.facts.append((s_clean, p.lower(), o_clean))
-            # record the fact's source session index (keeps index alignment with facts) — blocks future facts.
+            # record the fact's source session index (keeps index alignment with facts) - blocks future facts.
             self._store.fact_sess_idx.append(session.idx)
             # fact edge weight = accumulated co-occurrence count (official repo add_fact_edges).
             g = self._store.graph
@@ -444,7 +444,7 @@ class HippoRAG2Memory(Memory):
         for ent in entities:
             _register_phrase(str(ent))
 
-        # 4) passage edge (passage->phrase) — weight 1.0.
+        # 4) passage edge (passage->phrase) - weight 1.0.
         for ph_key in phrases_in_passage:
             self._store.graph.add_edge(p_key, ph_key, weight=1.0)
             self._store.phrase_to_passages.setdefault(ph_key, set()).add(p_key)
@@ -467,7 +467,7 @@ class HippoRAG2Memory(Memory):
             for k, e in zip(new_phrases, embs):
                 self._store.phrase_emb[k] = np.asarray(e, dtype=np.float32)
 
-        # 6) fact embedding — embed only the facts added in this session.
+        # 6) fact embedding - embed only the facts added in this session.
         #    Keeps the index alignment between the facts list and the fact_emb list.
         n_have = len(self._store.fact_emb)
         n_all = len(self._store.facts)
@@ -487,7 +487,7 @@ class HippoRAG2Memory(Memory):
             for e in f_embs:
                 self._store.fact_emb.append(np.asarray(e, dtype=np.float32))
 
-        # 7) synonym edge — cosine sim >= threshold between new and existing phrases.
+        # 7) synonym edge - cosine sim >= threshold between new and existing phrases.
         if new_phrases:
             self._add_synonym_edges(new_phrases)
 
@@ -502,15 +502,15 @@ class HippoRAG2Memory(Memory):
         As in the official repo (openie_openai_gpt.py), **2-call OpenIE**:
           (1) NER (passage -> named_entities)
           (2) triple extraction (passage + named_entities -> triples)
-        openie_single_call=True falls back to the 1-call path (_openie_single) — an intentional deviation.
+        openie_single_call=True falls back to the 1-call path (_openie_single) - an intentional deviation.
         """
         if self.openie_single_call:
             return self._openie_single(passage)
         metrics = CallMetrics()
 
-        # (1) NER — passage -> named_entities.
+        # (1) NER - passage -> named_entities.
         entities = self._ner(passage, metrics)
-        # (2) triple extraction — passage + named_entities -> triples (entities injected).
+        # (2) triple extraction - passage + named_entities -> triples (entities injected).
         triples = self._triple_extraction(passage, entities, metrics)
         return entities, triples, metrics
 
@@ -538,7 +538,7 @@ class HippoRAG2Memory(Memory):
     def _triple_extraction(
         self, passage: str, entities: list[str], metrics: CallMetrics
     ) -> list[list[str]]:
-        """Official triple extraction call — passage + named_entities input. metrics accumulated in place."""
+        """Official triple extraction call - passage + named_entities input. metrics accumulated in place."""
         ent_json = json.dumps([str(e) for e in entities])
         prompt = self._p_triple.replace("{passage}", passage).replace(
             "{named_entities}", ent_json
@@ -596,7 +596,7 @@ class HippoRAG2Memory(Memory):
         except Exception:
             pass
 
-        # 2) free-form fallback — parse the JSON object directly.
+        # 2) free-form fallback - parse the JSON object directly.
         gen = self.llm.generate(prompt)
         metrics.latency_sec += gen.latency_sec
         metrics.input_tokens += gen.input_tokens
@@ -661,7 +661,7 @@ class HippoRAG2Memory(Memory):
                 cnt += 1
 
     # ====================================================================
-    # retrieve — fact scoring → filter → PPR
+    # retrieve - fact scoring -> filter -> PPR
     # ====================================================================
     def retrieve(self, question: Question, current_session_idx: int) -> RetrievalResult:
         metrics = CallMetrics()
@@ -678,7 +678,7 @@ class HippoRAG2Memory(Memory):
                 extra={"route": "HIPPORAG2", "ppr_used": False}, metrics=metrics,
             )
 
-        # query embedding (once — shared by fact/passage scoring).
+        # query embedding (once - shared by fact/passage scoring).
         t0 = time.perf_counter()
         q_vec = np.asarray(self.embedder.embed_one(question.text), dtype=np.float32)
         metrics.latency_sec += time.perf_counter() - t0
@@ -686,10 +686,10 @@ class HippoRAG2Memory(Memory):
 
         # 1) fact dense scoring.
         #    - block future-session facts: only facts with fact_sess_idx < current_session_idx are candidates.
-        #      (a fact extracted from a future dialogue must not enter the PPR seed — prevents leakage.)
+        #      (a fact extracted from a future dialogue must not enter the PPR seed - prevents leakage.)
         #    - top_facts : final selected fact list (filter survivors or all candidates).
         #    - top_fact_scores : per-fact dense scores, index-aligned with top_facts
-        #      (the official repo adds each fact's own score to the seed — not averaged away).
+        #      (the official repo adds each fact's own score to the seed - not averaged away).
         top_facts: list[tuple[str, str, str]] = []
         top_fact_scores: list[float] = []
         if self._store.fact_emb:
@@ -702,7 +702,7 @@ class HippoRAG2Memory(Memory):
             ]
             if valid_idx:
                 fact_mat = np.stack([self._store.fact_emb[i] for i in valid_idx])  # (F', D)
-                # cosine similarity — the official repo unit-normalizes embeddings then dots.
+                # cosine similarity - the official repo unit-normalizes embeddings then dots.
                 # the embedder does not guarantee unit norm, so normalize here (avoids long-vector bias).
                 raw = _cosine_matvec(fact_mat, q_vec)
                 scores = _min_max_normalize(raw)  # aligned with valid_idx order.
@@ -714,7 +714,7 @@ class HippoRAG2Memory(Memory):
                 cand_scores = [float(scores[j]) for j in order]     # each candidate's dense score.
                 cand_facts = [self._store.facts[i] for i in cand_idx]
 
-                # 2) recognition memory — LLM filter (keep only relevant facts).
+                # 2) recognition memory - LLM filter (keep only relevant facts).
                 if self.use_filter and cand_facts:
                     kept, fmetrics = self._filter_facts(question.text, cand_facts)
                     metrics = metrics.merge(fmetrics)
@@ -733,7 +733,7 @@ class HippoRAG2Memory(Memory):
                         # (a) consider only candidates not yet matched -> two identical-string
                         #   candidates match to different indices (the old dict{str:idx}
                         #   collapsed duplicate strings to the last index, dropping a fact entirely).
-                        #   (b) cutoff=0.6 — the old cutoff=0.0 *always* returned the closest
+                        #   (b) cutoff=0.6 - the old cutoff=0.0 *always* returned the closest
                         #   candidate, so even a hallucinated irrelevant fact was force-matched,
                         #   polluting the seed and making the `if not match` guard dead code.
                         #   0.6 accepts only sufficiently similar matches.
@@ -761,13 +761,13 @@ class HippoRAG2Memory(Memory):
                 question, q_vec, passage_keys, metrics, ppr_used=False
             )
 
-        # 4) build the PPR seed distribution (per-fact scores passed — faithful to official repo).
-        #    pass current_session_idx — count a phrase's passages over past passages only (prevents future-frequency leakage).
+        # 4) build the PPR seed distribution (per-fact scores passed - faithful to official repo).
+        #    pass current_session_idx - count a phrase's passages over past passages only (prevents future-frequency leakage).
         seed, linking_info = self._build_seed(
             q_vec, passage_keys, top_facts, top_fact_scores, current_session_idx
         )
 
-        # 5) Personalized PageRank (pass current_session_idx — excludes future passage nodes).
+        # 5) Personalized PageRank (pass current_session_idx - excludes future passage nodes).
         ranked_passages = self._run_ppr(seed, passage_keys, current_session_idx)
         if not ranked_passages:
             return self._dense_passage_fallback(
@@ -839,7 +839,7 @@ class HippoRAG2Memory(Memory):
             number_of_occurs[phrase] += 1
           phrase_weights /= number_of_occurs   # element-wise average
 
-        - Each fact adds *its own dense score* (not averaged away — key to fidelity).
+        - Each fact adds *its own dense score* (not averaged away - key to fidelity).
         - passage weight: query-passage dense score (min-max) x passage_node_weight.
         Returns: (node_key -> seed_weight dict, phrase_text -> linking_score dict)
         """
@@ -874,7 +874,7 @@ class HippoRAG2Memory(Memory):
             phrase_weights[key] = w
             linking_info[self._store.phrase_text[key]] = w
 
-        # link_top_k cut — keep only the top-scoring phrases as seed (official repo get_top_k_weights).
+        # link_top_k cut - keep only the top-scoring phrases as seed (official repo get_top_k_weights).
         if self.linking_top_k and len(phrase_weights) > self.linking_top_k:
             top_keys = sorted(
                 phrase_weights, key=lambda k: phrase_weights[k], reverse=True
@@ -954,7 +954,7 @@ class HippoRAG2Memory(Memory):
         total = sum(v for v in seed.values() if v > 0)
         if total <= 0 or g.number_of_nodes() == 0:
             return []
-        # sparse personalization — positive seed items that exist in the (point-in-time) graph.
+        # sparse personalization - positive seed items that exist in the (point-in-time) graph.
         personalization = {k: v for k, v in seed.items() if v > 0 and g.has_node(k)}
         if not personalization:
             return []
@@ -968,10 +968,10 @@ class HippoRAG2Memory(Memory):
                 tol=1.0e-6,
             )
         except Exception:
-            # Absorb all PPR exceptions (not just PowerIterationFailedConvergence) as a safety net —
+            # Absorb all PPR exceptions (not just PowerIterationFailedConvergence) as a safety net -
             # prevents an uncaught exception from killing all of retrieve and zeroing that question's result.
             pr = _manual_ppr(g, personalization, self.damping)
-        # tie-break by passage key (determinism — independent of dict order on tied PPR scores).
+        # tie-break by passage key (determinism - independent of dict order on tied PPR scores).
         scored = [(k, pr.get(k, 0.0)) for k in passage_keys]
         scored.sort(key=lambda x: (-x[1], x[0]))
         return scored
@@ -989,7 +989,7 @@ class HippoRAG2Memory(Memory):
         scored = [
             (k, cos_sim(q_vec, self._store.passage_emb[k])) for k in passage_keys
         ]
-        # tie-break by passage key (same policy as _run_ppr — determinism on tied scores).
+        # tie-break by passage key (same policy as _run_ppr - determinism on tied scores).
         scored.sort(key=lambda x: (-x[1], x[0]))
         scored = scored[: self.num_retrieved]
         items, rendered = self._render_passages(scored)
@@ -1050,19 +1050,19 @@ class HippoRAG2Memory(Memory):
         return apply_token_limit(prompt, self.context_size)
 
     # ====================================================================
-    # answer — retrieve -> build prompt -> generate (same contract as GroupChat-Mem)
+    # answer - retrieve -> build prompt -> generate (same contract as GroupChat-Mem)
     # ====================================================================
     def answer(
         self, question: Question, current_session_idx: int,
         current_session: "Session | None" = None,
     ) -> tuple[str, RetrievalResult, CallMetrics]:
-        # current_session is accepted but ignored — the HippoRAG2 baseline uses only committed past sessions.
+        # current_session is accepted but ignored - the HippoRAG2 baseline uses only committed past sessions.
         result = self.retrieve(question, current_session_idx)
         prompt = self.build_qa_prompt(question, result)
         gen = self.llm.generate(prompt)
         metrics = result.metrics.merge(gen.to_metrics())
         # preserve the final QA generation's raw + reasoning + final prompt + retrieval rendering
-        # — used by run_baseline's record (same keys as GroupChat-Mem).
+        # - used by run_baseline's record (same keys as GroupChat-Mem).
         result.extra["qa_raw_text"] = gen.text
         result.extra["qa_reasoning_text"] = getattr(gen, "reasoning_text", "")
         result.extra["qa_final_prompt"] = prompt
@@ -1120,7 +1120,7 @@ class HippoRAG2Memory(Memory):
             k: set(v) for k, v in d.get("phrase_to_passages", {}).items()
         }
         s._synonym_done = {tuple(p) for p in d.get("synonym_done", [])}
-        # restore provenance (empty dict if absent in older snapshots — then _run_ppr gets an
+        # restore provenance (empty dict if absent in older snapshots - then _run_ppr gets an
         # empty graph and safely degrades to DPR fallback; filled on re-snapshot).
         s.fact_edge_sessions = {
             tuple(pair): {int(k): float(v) for k, v in sc.items()}
@@ -1146,7 +1146,7 @@ class HippoRAG2Memory(Memory):
         if not (len(s.fact_emb) == nf and len(s.fact_sess_idx) == nf):
             raise RuntimeError(
                 f"HippoRAG2 snapshot corrupted: facts({nf})/fact_emb({len(s.fact_emb)})/"
-                f"fact_sess_idx({len(s.fact_sess_idx)}) length mismatch — alignment invariant violated"
+                f"fact_sess_idx({len(s.fact_sess_idx)}) length mismatch - alignment invariant violated"
             )
         #   (b) if facts exist but provenance (phrase_first_sess/fact_edge_sessions) is empty,
         #       _run_ppr gets an empty point-in-time graph -> every question silently degrades to

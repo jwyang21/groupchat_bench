@@ -1,4 +1,4 @@
-# groupchat_qa — bundled default config (assets/configs/base.yaml)
+# groupchat_qa - bundled default config (assets/configs/base.yaml)
 # Runtime-immutable defaults. Per-experiment overrides live in the repo's
 # top-level configs/*.yaml, which are merged on top of this file.
 

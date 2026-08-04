@@ -1,4 +1,4 @@
-"""Oracle memory — retrieval upper-bound (perfect evidence + perfect routing).
+"""Oracle memory - retrieval upper-bound (perfect evidence + perfect routing).
 
 Background: for time-indexed group-chat QA, measure "how well the model does if
 retrieval were perfect" (the retrieval ceiling). Bypasses the memory backend's live
@@ -17,16 +17,16 @@ Oracle bundle structure (build_oracle.py):
         list[entry], entry = {... , oracle_records_by_cosine: list[{head,relation,tail,start_date}]}
   Both bundles are in the same order (one entry per question). entry.session_idx = the session the question was asked in = current_session_idx.
 
-Routing: select modality by GT q_kind — perfect routing + perfect retrieval = the true ceiling.
-  - q_kind == 'records' → records route, oracle records (cosine) into the {triples} slot.
-  - else (fan, etc.) → RAG route, oracle dialogues (alternating) into the {history} slot.
+Routing: select modality by GT q_kind - perfect routing + perfect retrieval = the true ceiling.
+  - q_kind == 'records' -> records route, oracle records (cosine) into the {triples} slot.
+  - else (fan, etc.) -> RAG route, oracle dialogues (alternating) into the {history} slot.
   If fallback=True and the first answer is (E), try once more with the opposite modality (matches GroupChat-Mem's (E)-fallback).
 
-Ordering: build_oracle already sorts (dialogue=alternating, records=cosine) → used **as-is without re-sorting**.
+Ordering: build_oracle already sorts (dialogue=alternating, records=cosine) -> used **as-is without re-sorting**.
       "use all as evidence" (context_size off = unlimited). raw normalization.
 
 Future leakage: the oracle bundle is collected at build time by date-matching against
-  the question's GT timestamp (past evidence sessions, 'future' → []), so it does not
+  the question's GT timestamp (past evidence sessions, 'future' -> []), so it does not
   preserve per-item source session_idx (no future filter at retrieve time). By the
   ceiling's definition it holds only GT (past) evidence, relying on the build-time guarantee.
 """
@@ -59,7 +59,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _entry_key(session_idx: Any, question: Any) -> tuple:
-    """lookup key — (session, question text).
+    """lookup key - (session, question text).
 
     questioner is excluded from the key: build_oracle's provenance questioner uses the
     **normal name** (e.g. 'Phoebe'), while a newname/shuffled run's Question.questioner
@@ -79,37 +79,37 @@ class OracleMemory(Memory):
         # context_size: 0/negative = token limit off (unlimited). serving max-model-len is the real ceiling.
         self.context_size = int(cfg.get("context_size", 0) or 0)
         self.fallback = bool(cfg.get("fallback", True))
-        # dialogue_only=True → no records route, always sessions route.
+        # dialogue_only=True -> no records route, always sessions route.
         #   Oracle = uses only the set of entire-session dialogues (alternating order)
         #   from each question's oracle-timestamp sessions (no records). Usually
         #   single-shot with fallback=false. In this mode, load succeeds even without a
         #   record bundle (record_by_key stays empty).
         self.dialogue_only = bool(cfg.get("oracle_dialogue_only", False))
-        # dual=True → inject **both** the entire dialogue and (GT) records from each
+        # dual=True -> inject **both** the entire dialogue and (GT) records from each
         #   question's oracle-timestamp sessions via qa_dual.txt simultaneously
         #   (all, k unlimited; a separate path isolated from route-select / dialogue_only).
         #   The GT records are usually loaded from the llm_name='gt' bundle.
         self.dual = bool(cfg.get("oracle_dual", False))
-        # records_only=True → always records route + qa_records regardless of q_kind.
+        # records_only=True -> always records route + qa_records regardless of q_kind.
         #   Inject only the GT record union (oracle_records_by_cosine) from each
         #   question's oracle-timestamp sessions (no dialogue; the mirror of
         #   dialogue_only). k_records=0 means all. Usually single-shot with fallback=false.
         self.records_only = bool(cfg.get("oracle_records_only", False))
         self.delimiter = cfg.get("delimiter", "=" * 40)
-        # top-k truncation — a fair ceiling using the same budget as the memory methods.
+        # top-k truncation - a fair ceiling using the same budget as the memory methods.
         #   Uses only the top-k of the already-sorted evidence (records=cosine, dials=alternating).
         #   num_records (records, default 250), num_sessions (dialogue, default 40).
-        #   0/negative = truncation off (all) — but the main policy defaults to records=250, sessions=40.
+        #   0/negative = truncation off (all) - but the main policy defaults to records=250, sessions=40.
         self.k_records = int(cfg.get("num_records", 250) or 0)
         self.k_sessions = int(cfg.get("num_sessions", 40) or 0)
-        # dialogue ordering choice — build_oracle policy defaults to alternating.
+        # dialogue ordering choice - build_oracle policy defaults to alternating.
         self.dialogue_rank = str(cfg.get("oracle_dialogue_rank", "alternating")).lower()
 
-        # QA prompt templates — same files as GroupChat-Mem.
+        # QA prompt templates - same files as GroupChat-Mem.
         self._p_sessions = load_prompt(cfg.get("prompt_sessions") or "qa_sessions.txt")
         self._p_records = load_prompt(cfg.get("prompt_records") or "qa_records.txt")
         self._p_no_hist = load_prompt(cfg.get("prompt_no_history") or "qa_no-history.txt")
-        # For dual mode — same template as GroupChat-Mem's dual prompt ({question}/{triples}/{history}).
+        # For dual mode - same template as GroupChat-Mem's dual prompt ({question}/{triples}/{history}).
         self._p_dual = load_prompt(cfg.get("prompt_dual") or "qa_dual.txt")
 
         # Load oracle bundles + build lookup.
@@ -133,7 +133,7 @@ class OracleMemory(Memory):
         norm = cfg.get("normalization", "raw")
         if not (ds_root and dt and trial is not None and llm_name):
             raise ValueError(
-                "[oracle] cfg requires dataset_root/data_type/trial/llm_name — "
+                "[oracle] cfg requires dataset_root/data_type/trial/llm_name - "
                 f"got: dataset_root={ds_root!r} data_type={dt!r} trial={trial!r} llm_name={llm_name!r}"
             )
         trial = int(trial)
@@ -148,7 +148,7 @@ class OracleMemory(Memory):
         with open(dlg_path, encoding="utf-8") as f:
             dlg_list = json.load(f)
 
-        # Index the record bundle by key (same order, but match by key to be safe). If dialogue_only, records are unneeded → empty dict.
+        # Index the record bundle by key (same order, but match by key to be safe). If dialogue_only, records are unneeded -> empty dict.
         record_by_key: dict[tuple, list] = {}
         if not self.dialogue_only:
             with open(record_path, encoding="utf-8") as f:
@@ -167,7 +167,7 @@ class OracleMemory(Memory):
                 "records": record_by_key.get(key, []),
             }
         LOGGER.info(
-            "[oracle] bundles loaded: dialogue=%s record=%s → lookup %d entries (llm=%s norm=%s t%d)",
+            "[oracle] bundles loaded: dialogue=%s record=%s -> lookup %d entries (llm=%s norm=%s t%d)",
             dlg_path.name, record_path.name, len(self._lookup), llm_name, norm, trial,
         )
 
@@ -184,20 +184,20 @@ class OracleMemory(Memory):
             v = entry.get("oracle_dialogues_by_alternating")
         else:
             v = entry.get("oracle_dialogues_time_ordered")
-        if not v:  # if the selected list is empty, fall back time_ordered → alternating → cosine
+        if not v:  # if the selected list is empty, fall back time_ordered -> alternating -> cosine
             v = (entry.get("oracle_dialogues_time_ordered")
                  or entry.get("oracle_dialogues_by_alternating")
                  or entry.get("oracle_dialogues_by_cosine") or [])
         return list(v)
 
     # ------------------------------------------------------------------
-    # Write side — oracle is precomputed, commit is a no-op.
+    # Write side - oracle is precomputed, commit is a no-op.
     # ------------------------------------------------------------------
     def commit(self, session: Session) -> CallMetrics:
         return CallMetrics()
 
     # ------------------------------------------------------------------
-    # Rendering — same format as GroupChat-Mem
+    # Rendering - same format as GroupChat-Mem
     # ------------------------------------------------------------------
     def _render_records(self, records: list) -> str:
         rendered, _ = _render_records_in_order(
@@ -219,7 +219,7 @@ class OracleMemory(Memory):
         e = self._lookup.get(key)
         if e is None:
             LOGGER.warning(
-                "[oracle] lookup miss: idx=%s q=%r — treating as empty evidence.",
+                "[oracle] lookup miss: idx=%s q=%r - treating as empty evidence.",
                 current_session_idx, (question.text or "")[:60],
             )
         return e
@@ -270,7 +270,7 @@ class OracleMemory(Memory):
         items = [Item(text=str(q)) for q in records] + [Item(text=str(d)) for d in dials]
         return RetrievalResult(
             items=items,
-            # rendered is for compatibility (logging) — build_qa_prompt uses records/sessions_rendered in extra.
+            # rendered is for compatibility (logging) - build_qa_prompt uses records/sessions_rendered in extra.
             rendered=records_rendered,
             metrics=CallMetrics(),
             extra={"route": "DUAL", "records_rendered": records_rendered,
@@ -285,7 +285,7 @@ class OracleMemory(Memory):
             return self._retrieve_dual(question, current_session_idx)
         e = self._lookup_entry(question, current_session_idx)
         q_kind = (e["q_kind"] if e else "")
-        # records_only → always records; dialogue_only → always sessions; else by q_kind.
+        # records_only -> always records; dialogue_only -> always sessions; else by q_kind.
         if self.records_only:
             route = "RECORDS"
         elif self.dialogue_only:
@@ -313,7 +313,7 @@ class OracleMemory(Memory):
         )
 
     # ------------------------------------------------------------------
-    # answer — supports (E)-fallback (opposite modality), matching GroupChat-Mem
+    # answer - supports (E)-fallback (opposite modality), matching GroupChat-Mem
     # ------------------------------------------------------------------
     def answer(
         self, question: Question, current_session_idx: int,
@@ -329,15 +329,15 @@ class OracleMemory(Memory):
         r1.extra["qa_retrieval_rendered"] = r1.rendered
 
         # If dual (dialogue+records already provided together), fallback off, or not
-        #   (E), finalize the first answer — enhanced has no opposite modality, so (E)-fallback is meaningless.
+        #   (E), finalize the first answer - enhanced has no opposite modality, so (E)-fallback is meaningless.
         if self.dual or self.records_only or not self.fallback or process_answer(gen1.text) != "(E)":
             return gen1.text, r1, metrics
 
-        # (E) → try once more with the opposite modality.
+        # (E) -> try once more with the opposite modality.
         first_route = r1.extra.get("route", "SESSIONS")
         fb_route = "RECORDS" if first_route == "SESSIONS" else "SESSIONS"
         r2 = self._retrieve_route(question, current_session_idx, fb_route)
-        # If the opposite modality is empty (no evidence), fallback is meaningless → keep the first answer.
+        # If the opposite modality is empty (no evidence), fallback is meaningless -> keep the first answer.
         if not r2.items:
             return gen1.text, r1, metrics
         prompt2 = apply_token_limit(self.build_qa_prompt(question, r2), self.context_size)
@@ -351,7 +351,7 @@ class OracleMemory(Memory):
         return gen2.text, r2, metrics
 
     # ------------------------------------------------------------------
-    # Persistence — oracle has zero build cost (JSON load) → no-op.
+    # Persistence - oracle has zero build cost (JSON load) -> no-op.
     # ------------------------------------------------------------------
     def snapshot(self, path: str) -> None:
         # oracle has no accumulated state, so write only an empty marker (for snapshot/restore wiring compatibility).
@@ -362,5 +362,5 @@ class OracleMemory(Memory):
             pass
 
     def restore(self, path: str) -> None:
-        # No accumulated state to restore — no-op (bundles are loaded in __init__).
+        # No accumulated state to restore - no-op (bundles are loaded in __init__).
         return None

@@ -6,7 +6,7 @@ endpoint with the fewest in-flight requests (least-loaded), so faster endpoints 
 more. When all endpoints are equally fast this is effectively round-robin (even distribution).
 
 For in-cell question parallelism (ThreadPool, answer_max_workers), each question is spread across
-multiple endpoints → distributes load off a single GPU and utilizes multiple server GPUs.
+multiple endpoints -> distributes load off a single GPU and utilizes multiple server GPUs.
 
 [failover] If the chosen endpoint call raises (dead endpoint connection refused / timeout / 5xx),
 retry on the next least-loaded endpoint. The last exception is raised only when all endpoints fail.
@@ -25,7 +25,7 @@ from typing import Any
 
 class RoundRobinLLM:
     """Calls clients in load-aware (least in-flight) order, and on call failure fails over to the
-    next least-loaded endpoint. (The class name is kept for call-site compatibility — the actual
+    next least-loaded endpoint. (The class name is kept for call-site compatibility - the actual
     behavior is load-aware.)
 
     Each self.llm.generate(_structured) call goes to the currently idlest endpoint; if that
@@ -34,7 +34,7 @@ class RoundRobinLLM:
     def __init__(self, clients: list[Any]):
         if not clients:
             raise ValueError("RoundRobinLLM requires at least 1 client")
-        # set directly on __dict__ → avoids __getattr__ (prevents infinite recursion).
+        # set directly on __dict__ -> avoids __getattr__ (prevents infinite recursion).
         self._clients = list(clients)
         self._lock = threading.Lock()
         # in-flight request count currently being processed by each client. Basis for least-loaded selection.
@@ -44,7 +44,7 @@ class RoundRobinLLM:
         """Pick the idx with the minimum in-flight among clients not in `tried`, increment its
         in-flight, and return it. Selection + increment are atomic within one lock, so concurrent
         calls do not pile onto the same idx and naturally distribute (on concurrent acquire, the
-        first thread takes idx0→1, the next thread sees idx0 at 1 and picks idx1…). Returns None if
+        first thread takes idx0->1, the next thread sees idx0 at 1 and picks idx1...). Returns None if
         no candidate. tie-break: on equal in-flight, prefer the smaller idx (strict '<' comparison)."""
         with self._lock:
             best: "int | None" = None
@@ -87,21 +87,21 @@ class RoundRobinLLM:
                     have_result = True
                     ep = getattr(c, "base_url", getattr(c, "name", "?"))
                     logging.warning(
-                        f"[RoundRobinLLM/load-aware] {method} judged failed (endpoint={ep}) → failover to next least-loaded"
+                        f"[RoundRobinLLM/load-aware] {method} judged failed (endpoint={ep}) -> failover to next least-loaded"
                     )
                     continue
                 return res
-            except Exception as e:              # noqa: BLE001 — dead/timeout/5xx all fail over
+            except Exception as e:              # noqa: BLE001 - dead/timeout/5xx all fail over
                 last_exc = e
                 ep = getattr(c, "base_url", getattr(c, "name", "?"))
                 logging.warning(
-                    f"[RoundRobinLLM/load-aware] {method} failed (endpoint={ep}) → failover to next least-loaded: {e}"
+                    f"[RoundRobinLLM/load-aware] {method} failed (endpoint={ep}) -> failover to next least-loaded: {e}"
                 )
             finally:
-                # regardless of success/failure, request ends → restore in-flight (after return on success, before next attempt on failure).
+                # regardless of success/failure, request ends -> restore in-flight (after return on success, before next attempt on failure).
                 self._release(idx)
         # All endpoints failed. If there is a result judged failed by fail_pred, return the last
-        #   result (no exception — the caller handles that result, e.g. a parsing_error dict,
+        #   result (no exception - the caller handles that result, e.g. a parsing_error dict,
         #   gracefully). If neither exists, raise the exception.
         if have_result:
             return last_result
@@ -117,9 +117,9 @@ class RoundRobinLLM:
     @staticmethod
     def _invoke_failed(res: Any) -> bool:
         # Decide whether the invoke-wrapper dict returned by _structured_with_fallback is a "failure".
-        #   parsing_error not None = dead/timeout/all methods failed → fail over to the next endpoint.
+        #   parsing_error not None = dead/timeout/all methods failed -> fail over to the next endpoint.
         #   parsing_error None (even if parsed=None) means the endpoint responded normally, so treat
-        #   as success (an empty response is the LLM's own result → the caller handles it with
+        #   as success (an empty response is the LLM's own result -> the caller handles it with
         #   count-preserving logic).
         return isinstance(res, dict) and res.get("parsing_error") is not None
 
@@ -128,12 +128,12 @@ class RoundRobinLLM:
         #   wrappers of _structured_with_fallback (multi-endpoint ChatOpenAI-based) with this pool
         #   to send one batch call to the least-in-flight endpoint.
         #   Note: if a caller's batches are strictly sequential (each batch depends on the previous
-        #     result), there are no concurrent calls, so in-flight is always 0→1→0 and every batch
+        #     result), there are no concurrent calls, so in-flight is always 0->1->0 and every batch
         #     effectively goes to idx0 (low distribution effect). The real value of this pool is
         #     "fail over to the next endpoint if one endpoint dies (dead/timeout) or parse fails".
         #   The wrapper does not raise but swallows into a dict(parsing_error=...), so pass
         #     _invoke_failed as fail_pred to trigger failover based on that dict. If all endpoints
-        #     fail, return the last result dict (including parsing_error) as-is → the caller
+        #     fail, return the last result dict (including parsing_error) as-is -> the caller
         #     handles it gracefully.
         return self._call_with_failover("invoke", *args, fail_pred=self._invoke_failed, **kwargs)
 

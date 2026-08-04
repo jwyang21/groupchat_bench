@@ -53,12 +53,12 @@ Example 4.
 - Constraint: Returning up to 3 question subject
 - Question subject: ["Maria"]
 - Explanation: 
-    - This question centers on the questioner's, Maria's, personal experience—specifically, her lapse in memory. The use of the first-person pronoun "I" ("I totally forgot what I bought") indicates that the problem and the required information are about the questioner herself. Following the rule that identifies the questioner as the subject in cases of ambiguity involving personal pronouns, "Maria" is correctly identified as the subject.
+    - This question centers on the questioner's, Maria's, personal experience-specifically, her lapse in memory. The use of the first-person pronoun "I" ("I totally forgot what I bought") indicates that the problem and the required information are about the questioner herself. Following the rule that identifies the questioner as the subject in cases of ambiguity involving personal pronouns, "Maria" is correctly identified as the subject.
     - Since it holds that "length of a list ["Maria"] <= 3", ["Maria"] can be a final output without any additional process.
 ========================================
 You will be given a question, a questioner, and a set of options for the question subject.
 Your task is to return up to {k} candidates for the question subject after carefully analyzing the question and the provided options.
-    - Each output **MUST** be exactly one of the items in the given list (copy it verbatim) — never output any entity that is not in the given list.
+    - Each output **MUST** be exactly one of the items in the given list (copy it verbatim) - never output any entity that is not in the given list.
 Do NOT output any intermediate steps leading to the final answer.
 Your final output must be a list of strings, with each element representing a candidate for the question subject.
 

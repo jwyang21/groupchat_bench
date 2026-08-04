@@ -1,35 +1,35 @@
-"""EmbeddingCache — a file-backed key→vec dict that cumulatively reduces OpenAI API calls.
+"""EmbeddingCache - a file-backed key->vec dict that cumulatively reduces OpenAI API calls.
 
 Two uses:
   1) precompute (`preprocess/v1_3_1/build_embeddings.py`):
      run once and all (entire/partial dialogue + question + record) are batch-embedded and stored.
   2) experiment runtime (`memory/groupchat_mem.py`, `CachedEmbedder`):
-     cache lookup → on miss, live embed → add the result to the cache + flush immediately.
+     cache lookup -> on miss, live embed -> add the result to the cache + flush immediately.
      From the next cell/session within the same run, it is a cache hit.
 
 Pickle security: these cache files are **produced/consumed only by this module** (trusted source).
-Never load pickles from an external source — pickle.load can execute arbitrary code. When the cache
+Never load pickles from an external source - pickle.load can execute arbitrary code. When the cache
 path is user-supplied, validate that it lives inside the project (e.g. data/) before use.
 
 ================================================================================
-File format (incremental/delta approach — avoids saturating NFS bandwidth)
+File format (incremental/delta approach - avoids saturating NFS bandwidth)
 ================================================================================
 Previously flush() **rewrote the entire _data (hundreds of MB) atomically every time**. When
-multiple processes share one cache and flush on every miss, this causes (a) hundreds of MB × frequent
+multiple processes share one cache and flush on every miss, this causes (a) hundreds of MB x frequent
 flushes = a burst of NFS writes, and (b) one process's atomic rename turns another process's open
 read fd into ESTALE, so reads contend indefinitely and the whole experiment starves on NFS.
 
-→ Replaced with an **incremental (delta) approach**:
+-> Replaced with an **incremental (delta) approach**:
   - **base file** `{path}` : the full dict pickle (written once by build_embeddings or compact).
         runtime flush **never touches it** (read-only baseline).
   - **delta file** `{path}.delta.{pid}_{uuid}.pkl` : **only items added since the last flush**.
-        Each flush writes a new file with a **unique name** → two processes never touch the same file
-        → no rename-over-open conflict/ESTALE, write size = only new items (small).
-  - **load** : merge base + all `{path}.delta.*.pkl` (later values win — the same text has the same
+        Each flush writes a new file with a **unique name** -> two processes never touch the same file
+        -> no rename-over-open conflict/ESTALE, write size = only new items (small).
+  - **load** : merge base + all `{path}.delta.*.pkl` (later values win - the same text has the same
         embedding, so it is idempotent).
-  - **compact()** : merge base + all deltas → rewrite base (atomic) + delete the merged deltas.
+  - **compact()** : merge base + all deltas -> rewrite base (atomic) + delete the merged deltas.
         Under an exclusive lock (`{path}.compact.lock`), **only one process** runs it. When deltas
-        exceed a threshold, load attempts it automatically (try-lock; skip if held) — replacing N
+        exceed a threshold, load attempts it automatically (try-lock; skip if held) - replacing N
         processes each rewriting the whole file with **a single compaction**.
 
 Format of each file (base/delta):
@@ -42,7 +42,7 @@ Format of each file (base/delta):
 
 Invariants:
   - **unique-name delta + atomic rename**: no partial write/conflict/ESTALE.
-  - **base is immutable to runtime flush** — concurrent reads are safe.
+  - **base is immutable to runtime flush** - concurrent reads are safe.
   - **fcntl.flock**: best-effort (NFS). Correctness is guaranteed by unique file names + atomic
     rename (not dependent on the lock).
   - **threading.RLock**: safe across multiple threads of the same process.
@@ -68,7 +68,7 @@ import numpy as np
 
 # ------------------------------------------------------------------
 # module-level threading lock (prevents in-process thread conflicts)
-# One RLock is shared per cache file path — even if the same path is created via multiple instances,
+# One RLock is shared per cache file path - even if the same path is created via multiple instances,
 # it is the same lock object. Multiple threads in ablation updating the same cache file concurrently
 # do not corrupt the in-memory dict.
 # ------------------------------------------------------------------
@@ -76,7 +76,7 @@ _PATH_LOCKS: dict[str, threading.RLock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
 
 # When the number of delta files exceeds this, load attempts an automatic compact (try-lock, skip if held).
-# Too small → frequent compaction ↑ base rewrites; too large → delta glob/load ↑ on load.
+# Too small -> frequent compaction increases base rewrites; too large -> delta glob/load increases on load.
 _DEFAULT_COMPACT_THRESHOLD = 64
 
 
@@ -91,12 +91,12 @@ def _get_path_lock(path: Path) -> threading.RLock:
 
 
 class EmbeddingCache:
-    """text→vec dict, file-backed, supports **incremental (delta) update + flush**.
+    """text->vec dict, file-backed, supports **incremental (delta) update + flush**.
 
     Args:
         path: base cache file path (`.pickle` extension recommended). deltas are `{path}.delta.*.pkl`.
         model_name: embedder.name. Must match the file metadata to load. On mismatch, that file is
-                    skipped and this instance blocks writes (readonly) — permanently protecting old data.
+                    skipped and this instance blocks writes (readonly) - permanently protecting old data.
         dim: vector dimension (cache validation + sanity check).
         autoflush_every: auto-flush (= write 1 delta) after N sets. 0 to disable.
                          runtime 1, build 100 recommended. With the delta approach, flush cost = only new items.
@@ -156,7 +156,7 @@ class EmbeddingCache:
             return []
 
     def _new_delta_path(self) -> Path:
-        # unique name: pid + uuid4 → two processes/flushes never collide.
+        # unique name: pid + uuid4 -> two processes/flushes never collide.
         token = f"{os.getpid()}_{uuid.uuid4().hex}"
         return self.path.with_name(f"{self.path.name}.delta.{token}.pkl")
 
@@ -164,7 +164,7 @@ class EmbeddingCache:
         return self.path.with_name(f"{self.path.name}.compact.lock")
 
     # ------------------------------------------------------------------
-    # I/O — load
+    # I/O - load
     # ------------------------------------------------------------------
     def _validate_meta(self, meta: dict, src: str) -> bool:
         """Whether the file meta's model_name/dim matches this instance. False (skip) on mismatch."""
@@ -176,7 +176,7 @@ class EmbeddingCache:
             logging.warning(
                 f"[EmbeddingCache] {src}: metadata mismatch "
                 f"(file: model={meta.get('model_name')!r}/dim={meta.get('dim')}, "
-                f"requested: model={self.model_name!r}/dim={self.dim}) — skipping this file."
+                f"requested: model={self.model_name!r}/dim={self.dim}) - skipping this file."
             )
             return False
         return True
@@ -184,7 +184,7 @@ class EmbeddingCache:
     def _load_one_file(self, p: Path, *, is_base: bool) -> int:
         """Merge one pickle file (base or delta) into _data. Returns the number of accepted entries.
 
-        Missing/corrupt/mismatch → warn and return 0 (does not kill the whole load).
+        Missing/corrupt/mismatch -> warn and return 0 (does not kill the whole load).
         If is_base=True and there is a mismatch, set readonly (preserve the old base).
         """
         if not p.exists():
@@ -197,20 +197,20 @@ class EmbeddingCache:
                 ImportError, ModuleNotFoundError, TypeError, ValueError) as e:
             logging.warning(
                 f"[EmbeddingCache] load failed ({p.name}): {type(e).__name__}: {e}. "
-                f"{'base→readonly. ' if is_base else ''}skipping this file."
+                f"{'base->readonly. ' if is_base else ''}skipping this file."
             )
             if is_base:
                 self._readonly = True
             return 0
         if not isinstance(obj, dict):
-            logging.warning(f"[EmbeddingCache] {p.name}: not a dict — skip.")
+            logging.warning(f"[EmbeddingCache] {p.name}: not a dict - skip.")
             if is_base:
                 self._readonly = True
             return 0
         meta = obj.get("__meta__") or {}
         if not self._validate_meta(meta, p.name):
             if is_base:
-                # base is a different model/dim → block writes (permanently preserve the old base).
+                # base is a different model/dim -> block writes (permanently preserve the old base).
                 self._readonly = True
             return 0
         if is_base:
@@ -237,7 +237,7 @@ class EmbeddingCache:
                 delta_n += self._load_one_file(dp, is_base=False)
             logging.info(
                 f"[EmbeddingCache] {self.path.name}: loaded base={base_n} "
-                f"+ delta={delta_n} ({len(deltas)} files) → {len(self._data)} total."
+                f"+ delta={delta_n} ({len(deltas)} files) -> {len(self._data)} total."
             )
         # if there are many deltas, auto-compact (one process only; skip if readonly).
         if not self._readonly and len(deltas) > self.compact_threshold:
@@ -248,7 +248,7 @@ class EmbeddingCache:
 
     @staticmethod
     def _flock(fd: int, *, exclusive: bool, nonblock: bool = False) -> bool:
-        """fcntl.flock — assumes POSIX. Returns whether the lock was acquired (meaningful with nonblock).
+        """fcntl.flock - assumes POSIX. Returns whether the lock was acquired (meaningful with nonblock).
 
         On NFS, flock is best-effort. Correctness is guaranteed by unique file names + atomic rename,
         so data is safe even if the lock fails. With nonblock=True (compaction try-lock), returns
@@ -257,7 +257,7 @@ class EmbeddingCache:
         try:
             import fcntl  # POSIX only
         except ImportError:
-            return True  # Windows — safe via threading.RLock + atomic rename.
+            return True  # Windows - safe via threading.RLock + atomic rename.
         flag = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
         if nonblock:
             flag |= fcntl.LOCK_NB
@@ -266,12 +266,12 @@ class EmbeddingCache:
             return True
         except OSError as e:
             if nonblock:
-                return False  # another process holds it — normal (compaction skip).
+                return False  # another process holds it - normal (compaction skip).
             logging.debug(f"[EmbeddingCache] fcntl.flock failed (best-effort): {e}")
             return True  # the blocking path proceeds best-effort.
 
     # ------------------------------------------------------------------
-    # I/O — flush (write delta) / compact
+    # I/O - flush (write delta) / compact
     # ------------------------------------------------------------------
     def _atomic_write_pickle(self, obj: dict, dest: Path) -> None:
         """Write obj to dest atomically (mkstemp + os.replace). dest must be a unique name to be safe."""
@@ -287,7 +287,7 @@ class EmbeddingCache:
             except Exception:
                 os.close(tmp_fd)
                 raise
-            tmp_fd = None  # ownership → f
+            tmp_fd = None  # ownership -> f
             try:
                 pickle.dump(obj, f, protocol=5)
                 f.flush()
@@ -310,7 +310,7 @@ class EmbeddingCache:
                     pass
 
     def flush(self) -> None:
-        """**Incremental flush** — write only new items (_dirty) since the last flush as a new delta file.
+        """**Incremental flush** - write only new items (_dirty) since the last flush as a new delta file.
 
         The base (full dict) is never touched (avoids the NFS bandwidth burst + ESTALE). No-op if
         _dirty is empty. No-op if readonly.
@@ -336,13 +336,13 @@ class EmbeddingCache:
             self._pending = 0
 
     def compact(self, _auto: bool = False) -> bool:
-        """Merge base + all deltas → rewrite base (atomic) + delete the merged deltas.
+        """Merge base + all deltas -> rewrite base (atomic) + delete the merged deltas.
 
         Runs in **only one process** under an exclusive lock (`{path}.compact.lock`). With _auto=True
         (auto-called on load), it uses a try-lock and skips immediately if held. Returns whether
         compaction ran.
 
-        Order: (1) snapshot the current delta list → (2) rewrite base (merged, atomic) →
+        Order: (1) snapshot the current delta list -> (2) rewrite base (merged, atomic) ->
                  (3) delete only the snapshotted deltas. Since base is atomically renamed before the
                  deltas are deleted, a concurrent loader reading at any point loses no data (duplicate
                  merges are idempotent). New deltas created by other processes after the snapshot are
@@ -357,8 +357,8 @@ class EmbeddingCache:
             lf = open(lock_path, "w")
             got = self._flock(lf.fileno(), exclusive=True, nonblock=_auto)
             if not got:
-                return False  # another process is compacting — skip.
-            # (1) snapshot — target only the deltas that exist now.
+                return False  # another process is compacting - skip.
+            # (1) snapshot - target only the deltas that exist now.
             deltas = self._delta_paths()
             with self._lock:
                 # _data is already the base+delta merge + this process's new additions.
@@ -380,7 +380,7 @@ class EmbeddingCache:
                     pass
             logging.info(
                 f"[EmbeddingCache] {self.path.name}: compacted {len(deltas)} delta files "
-                f"→ base ({len(self._data)} entries)."
+                f"-> base ({len(self._data)} entries)."
             )
             return True
         except OSError as e:
@@ -436,7 +436,7 @@ class EmbeddingCache:
     ) -> np.ndarray:
         """Return the embeddings (n, dim) of `texts`. Only cache misses call embedder.embed() + write a delta.
 
-        - preserves order (out[i]=texts[i]), dedups duplicates, empty/None→zero vec (not stored in cache),
+        - preserves order (out[i]=texts[i]), dedups duplicates, empty/None->zero vec (not stored in cache),
           flushes a delta every flush_every_n_batches.
         """
         if batch_size <= 0:
@@ -508,7 +508,7 @@ class EmbeddingCache:
         return out
 
     def embed_one_cached(self, embedder: Any, text: str) -> np.ndarray:
-        """Embed a single text. hit O(1), miss → embed + delta autoflush."""
+        """Embed a single text. hit O(1), miss -> embed + delta autoflush."""
         if not text:
             return np.zeros(self.dim, dtype=np.float32)
         with self._lock:

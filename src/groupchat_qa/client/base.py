@@ -2,7 +2,7 @@
 
 Design intent:
 - Wrap langchain's `BaseChatModel` to provide a *provider-agnostic* interface.
-- Every call is record-bearing — returns text + latency + input/output tokens together.
+- Every call is record-bearing - returns text + latency + input/output tokens together.
 - Structured responses are enforced via `generate_structured(prompt, schema=BaseModel)`
   (using langchain `with_structured_output`).
 """
@@ -45,9 +45,9 @@ class LLM(ABC):
         self.temperature = temperature
         self.top_p = top_p
         self.max_tokens = max_tokens
-        # reproducibility seed — passed to vLLM/OpenAI per request. Even with temperature>0,
+        # reproducibility seed - passed to vLLM/OpenAI per request. Even with temperature>0,
         # sampling is reproducible given the same seed + same HW + same vLLM version
-        # (vLLM Reproducibility docs). This is separate from the client-side seed_everything —
+        # (vLLM Reproducibility docs). This is separate from the client-side seed_everything -
         # that seeds python/numpy/torch RNG, this seeds the server sampling RNG.
         # None means seed is not passed (default behavior). Whether the seed is actually
         # attached to the request is each client's responsibility
@@ -87,7 +87,7 @@ class LLM(ABC):
         response = self._chat.invoke(messages)
         latency = time.perf_counter() - t0
         in_tok, out_tok = self._extract_usage(response)
-        # Prevent str(None)="None" from leaking when content is None (e.g. tool-only responses) —
+        # Prevent str(None)="None" from leaking when content is None (e.g. tool-only responses) -
         # use an empty string when content is None/missing.
         _content = getattr(response, "content", None)
         text = _content if _content is not None else str(response)
@@ -110,7 +110,7 @@ class LLM(ABC):
         - `include_raw=True` also returns the raw AIMessage to extract tokens from usage_metadata.
         - Since vLLM's OpenAI-compat method support varies by model, fall back through
           `json_schema -> function_calling -> json_mode`.
-        - On parse failure (parsing_error present), returns `parsed = None` — the caller can
+        - On parse failure (parsing_error present), returns `parsed = None` - the caller can
           then apply a free-form fallback.
         """
         from langchain_core.messages import HumanMessage, SystemMessage
@@ -149,7 +149,7 @@ class LLM(ABC):
             return None, GenerationRecord(
                 text="", latency_sec=failed_latency, input_tokens=0, output_tokens=0
             )
-        # include_raw=True → resp = {"raw": AIMessage, "parsed": T | None, "parsing_error": ...}
+        # include_raw=True -> resp = {"raw": AIMessage, "parsed": T | None, "parsing_error": ...}
         parsed = resp.get("parsed") if isinstance(resp, dict) else resp
         raw_msg = resp.get("raw") if isinstance(resp, dict) else None
         in_tok, out_tok = self._extract_usage(raw_msg) if raw_msg is not None else (0, 0)

@@ -1,4 +1,4 @@
-"""Google (Gemini) client — langchain `ChatGoogleGenerativeAI` wrapper."""
+"""Google (Gemini) client - langchain `ChatGoogleGenerativeAI` wrapper."""
 from __future__ import annotations
 
 from typing import Any

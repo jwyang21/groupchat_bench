@@ -2,13 +2,13 @@
 
 Two lightweight reference settings reported alongside GroupChat-Mem:
 
-  * SimpleRAG — retrieve sessions from the raw session repository S and answer over them.
+  * SimpleRAG - retrieve sessions from the raw session repository S and answer over them.
     ``retriever`` selects the ranking signal:
       - ``bm25``      : sparse lexical retrieval (BM25)
       - ``embedding`` : dense semantic retrieval (embedding cosine similarity)
     These correspond to the paper's "Simple RAG (BM25)" and
     "Simple RAG (OpenAI Embedding)" baselines.
-  * DirectQA — no history at all: the model answers from parametric knowledge only
+  * DirectQA - no history at all: the model answers from parametric knowledge only
     (the paper's "Direct QA (No History)" reference), quantifying residual leakage.
 
 Both store each session verbatim and share the Memory interface (commit / retrieve /
@@ -79,7 +79,7 @@ class SimpleRAGMemory(Memory):
         self._p_no_hist = load_prompt(cfg.get("prompt_no_history") or _nohist_prompt)
 
     # ------------------------------------------------------------------
-    # Write side — store each session verbatim in S.
+    # Write side - store each session verbatim in S.
     # ------------------------------------------------------------------
     def commit(self, session: Session) -> CallMetrics:
         metrics = CallMetrics()

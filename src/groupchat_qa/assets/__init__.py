@@ -7,7 +7,7 @@ README structure diagram); ``PROMPT_DIR`` resolves there so that
 ``prompts/`` directory is not found (e.g. when the package is installed as a wheel
 without it), it falls back to a ``prompt/`` directory bundled next to this file.
 
-``CONFIG_DIR`` points at the package-bundled ``configs/`` holding ``base.yaml`` — the
+``CONFIG_DIR`` points at the package-bundled ``configs/`` holding ``base.yaml`` - the
 internal default that each user-facing config in the repo's top-level ``configs/``
 directory is merged on top of.
 """

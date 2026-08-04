@@ -1,1 +1,1 @@
-"""Pipeline — orchestrator that handles multiple tasks together."""
+"""Pipeline - orchestrator that handles multiple tasks together."""

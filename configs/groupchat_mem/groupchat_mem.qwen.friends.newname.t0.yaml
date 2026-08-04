@@ -1,4 +1,4 @@
-# GroupChat-Mem — example config (Friends, New Names, trial 0, Qwen backbone).
+# GroupChat-Mem - example config (Friends, New Names, trial 0, Qwen backbone).
 #
 # Run:
 #   PYTHONPATH=src python src/run/run_groupchat_mem.py \

@@ -39,7 +39,7 @@ def load_pickle(fname: str | Path) -> Any:
 
 
 def save_pickle(data: Any, fname: str | Path) -> None:
-    """Atomic write — tmp file + os.replace.
+    """Atomic write - tmp file + os.replace.
 
     Even if interrupted by SIGKILL / OOM / ENOSPC, the destination file is not truncated
     (only the tmp file is partial; on success, os.replace does an atomic rename).
@@ -66,7 +66,7 @@ def save_pickle(data: Any, fname: str | Path) -> None:
 # YAML config
 # ----------------------------------------------------------------------------
 def load_yaml(fname: str | Path) -> dict:
-    """Load a yaml file into a dict — simple fallback for environments without sconf."""
+    """Load a yaml file into a dict - simple fallback for environments without sconf."""
     import yaml
 
     with open(fname, "r", encoding="utf-8") as f:

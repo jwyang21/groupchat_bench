@@ -9,7 +9,7 @@ is normalized, then compared against each normalized option:
 Per-option scores are returned as well, so one can review after the experiment
 which answer matched which option and why.
 
-Normalization follows the SQuAD official `normalize_answer` family (general — no dataset-specific token hardcoding).
+Normalization follows the SQuAD official `normalize_answer` family (general - no dataset-specific token hardcoding).
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def match_option(gen: str | None, options: list[str], fuzzy_floor: float = 0.0) 
         matched_text : selected option text
         match_type   : 'exact' | 'fuzzy' | 'floor_fallback' | 'no_options'
         gen_norm     : normalized gen
-        scores       : [{option, option_norm, score}] — token_set_ratio for every option (for post-hoc review)
+        scores       : [{option, option_norm, score}] - token_set_ratio for every option (for post-hoc review)
     """
     g = normalize_answer(gen)
     if not options:

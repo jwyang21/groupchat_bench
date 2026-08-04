@@ -1,4 +1,4 @@
-"""Reproducibility — unified seeding."""
+"""Reproducibility - unified seeding."""
 import os
 import random
 
@@ -23,5 +23,5 @@ def seed_everything(seed: int = 42) -> None:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
     except ImportError:
-        # torch not available — ignore.
+        # torch not available - ignore.
         pass

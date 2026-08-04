@@ -1,4 +1,4 @@
-"""Embedder factory — creates an instance from the backend name in config."""
+"""Embedder factory - creates an instance from the backend name in config."""
 from __future__ import annotations
 
 from typing import Any

@@ -1,4 +1,4 @@
-"""run_baseline.py — baseline / oracle / simple-RAG / groupchat-mem entry point (commit + QA).
+"""run_baseline.py - baseline / oracle / simple-RAG / groupchat-mem entry point (commit + QA).
 
 Uses:
   - Baselines + oracle + simple_rag + groupchat_mem: `configs/baselines/<...>.yaml`.
@@ -49,7 +49,7 @@ from groupchat_qa.pipeline.data_loader import load_converted_dataset, load_query
 from groupchat_qa.utils import process_answer, save_pickle, load_pickle, seed_everything, load_project_env
 from groupchat_qa.utils.answer_match import match_option
 
-# Auto-discover .env — traverse upward from this .py file and load the first .env (caller-relative).
+# Auto-discover .env - traverse upward from this .py file and load the first .env (caller-relative).
 load_project_env(start=__file__, override=True)
 
 
@@ -59,7 +59,7 @@ def _atomic_write_json(path: "Path | str", obj: Any) -> None:
     Shared helper for per-session incremental save + resume (simulate/ablation). To avoid partial-write
     corruption even when called every N sessions, write a temp file in the same directory then replace
     via os.replace (an atomic rename within the same filesystem). The tmp filename includes the PID so
-    concurrent writers never collide on tmp — assuming the result file itself has a single writer
+    concurrent writers never collide on tmp - assuming the result file itself has a single writer
     (simulate=per-llm, ablation=per-grid_idx). Callers wrap this best-effort so a save failure does not
     kill the experiment (default=str guards serialization)."""
     path = Path(path)
@@ -95,7 +95,7 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
       that value, and if max_tokens is below answer_budget + 6384 (content headroom), raise it so
       the budget is not truncated by max_tokens.
 
-    Note: thinking_token_budget is meaningless for enable_thinking=false (non-thinking) models —
+    Note: thinking_token_budget is meaningless for enable_thinking=false (non-thinking) models -
     the server ignores it, but to avoid confusion we only overwrite the budget when
     enable_thinking=true.
     """
@@ -108,14 +108,14 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
     if ab <= 0:
         raise ValueError(f"qa.answer_budget must be a positive integer, got {ab}")
 
-    new_cfg = dict(llm_cfg)  # Shallow copy — rebuild only extra_body deeply (avoid mutating original).
+    new_cfg = dict(llm_cfg)  # Shallow copy - rebuild only extra_body deeply (avoid mutating original).
     extra_body = dict(new_cfg.get("extra_body") or {})
     ctk = dict(extra_body.get("chat_template_kwargs") or {})
     # Skip budget injection for models where enable_thinking is explicitly False (meaningless + confusing).
     if ctk.get("enable_thinking") is False:
         logging.warning(
             f"[simulate] qa.answer_budget={ab} set, but LLM "
-            f"{new_cfg.get('name', new_cfg.get('model_name', '?'))} has enable_thinking=false — "
+            f"{new_cfg.get('name', new_cfg.get('model_name', '?'))} has enable_thinking=false - "
             f"skipping budget injection."
         )
         return llm_cfg
@@ -126,7 +126,7 @@ def _apply_answer_budget(llm_cfg: dict, answer_budget: int | None) -> dict:
         logging.warning(
             f"[simulate] qa.answer_budget={ab} set, but LLM "
             f"{new_cfg.get('name', new_cfg.get('model_name', '?'))} is a reasoning_effort model "
-            f"(e.g., gpt-oss, no thinking_token_budget knob) — skipping budget injection."
+            f"(e.g., gpt-oss, no thinking_token_budget knob) - skipping budget injection."
         )
         return llm_cfg
     extra_body["thinking_token_budget"] = ab
@@ -164,18 +164,18 @@ def _resolve_base_url(llm_cfg: dict) -> str:
 def _make_llm_from_cfg(llm_cfg: dict, seed: int | None = None):
     # Pass every key except the known ones straight through to ChatOpenAI
     # (e.g., extra_body={"chat_template_kwargs":{"enable_thinking": true}} for the Qwen3 thinking toggle)
-    # seed: request seed for reproducibility (run.seed). The caller passes cfg.run.seed — even with
+    # seed: request seed for reproducibility (run.seed). The caller passes cfg.run.seed - even with
     #   temperature>0, the same seed+HW+vLLM version reproduces sampling (vLLM Reproducibility docs).
     #   This is the server-side sampling RNG, separate from the client-side seed_everything
     #   (python/numpy/torch RNG). If None, it is not passed (existing behavior).
     #   Note: the LLM client is created once outside the grid loop, so varying run.seed as a grid axis
     #   does not change the request seed (current configs fix run.seed, so this is moot).
-    # Include "seed" in the known set — avoids a duplicate/keyword collision with run.seed if a
+    # Include "seed" in the known set - avoids a duplicate/keyword collision with run.seed if a
     #   per-llm seed key exists.
     _known = {"provider", "name", "model_name", "base_url", "host", "port",
               "api_key", "temperature", "top_p", "max_tokens", "system_prompt", "seed",
-              "max_model_len",  # max_model_len: for context_size computation (not passed to client — excluded)
-              "extra_base_urls"}  # for endpoint-pool distribution (excluded — not passed to make_llm)
+              "max_model_len",  # max_model_len: for context_size computation (not passed to client - excluded)
+              "extra_base_urls"}  # for endpoint-pool distribution (excluded - not passed to make_llm)
     extra = {k: v for k, v in llm_cfg.items() if k not in _known}
 
     def _mk(burl: str):
@@ -192,7 +192,7 @@ def _make_llm_from_cfg(llm_cfg: dict, seed: int | None = None):
             **extra,
         )
 
-    # endpoint pool — if extra_base_urls (list) is present, wrap primary + extras in RoundRobinLLM to
+    # endpoint pool - if extra_base_urls (list) is present, wrap primary + extras in RoundRobinLLM to
     #   distribute per-cell parallel question calls across several vLLM endpoints (the same qwen-on on
     #   multiple servers). Otherwise use a single client (existing behavior).
     _extra_urls = llm_cfg.get("extra_base_urls") or []
@@ -208,7 +208,7 @@ def _check_vllm_endpoint(llm_cfg: dict, timeout: float = 30.0) -> None:
     """Verify vLLM endpoint reachability + served-model-name match.
 
     - timeout 5s -> 30s (avoids false negatives from a busy vLLM's slow /health response).
-    - Besides /health 200, query /v1/models — confirm the yaml model_name matches the actual served
+    - Besides /health 200, query /v1/models - confirm the yaml model_name matches the actual served
       alias (prevents a silent mismatch when the yaml was not updated after a vLLM restart).
 
     Fail-fast: validate on the main thread before launching all LLM threads, which would otherwise
@@ -245,8 +245,8 @@ def _check_vllm_endpoint(llm_cfg: dict, timeout: float = 30.0) -> None:
                 f"  -> check the yaml model_name or vLLM's --served-model-name (prevents silent-fail mismatch)."
             )
     except (urllib.error.URLError, OSError) as e:
-        # A /v1/models query failure passed health, so warn only — do not force a failure.
-        logging.warning(f"LLM {name}: /v1/models query failed ({e}) — skipping model_name validation.")
+        # A /v1/models query failure passed health, so warn only - do not force a failure.
+        logging.warning(f"LLM {name}: /v1/models query failed ({e}) - skipping model_name validation.")
 
 
 def _accuracy_by_hop(records: list[dict]) -> dict[str, float]:
@@ -295,7 +295,7 @@ def _commit_all_sessions(
         return
     workers = max(1, int(commit_extract_workers))
 
-    # Disk-cache extraction results — analyze(LLM)+embed (session-independent) is expensive, so avoid
+    # Disk-cache extraction results - analyze(LLM)+embed (session-independent) is expensive, so avoid
     #   recomputation on re-run. The caller composes a unique cache path per (dataset, data_type,
     #   turns_per_note, llm), with session_idx as the filename -> never mixes with other tpn/model/data
     #   outputs. Cache hit -> load, miss -> memory.extract then save. extract leaves the store
@@ -318,7 +318,7 @@ def _commit_all_sessions(
                 logging.warning(f"[{llm_name}] extract cache save failed (idx={sess.idx}): {e}")
         return ex
 
-    # ── Resume: continue commit from the latest session checkpoint ──
+    # -- Resume: continue commit from the latest session checkpoint --
     #   When re-running a run whose commit_prepared (phase 2) was interrupted, restore the last saved
     #   session checkpoint (full snapshot) and continue committing from the next session. The snapshot
     #   is the entire accumulated store up to that point, so restoring only the single latest suffices
@@ -350,8 +350,8 @@ def _commit_all_sessions(
         return
     n_remaining = end - resume_from
 
-    # ── Phase 1: extract (session-independent LLM extraction + disk caching) ──
-    # Store results in session-order slots (idx-start) — phase 2 consumes them in ascending order
+    # -- Phase 1: extract (session-independent LLM extraction + disk caching) --
+    # Store results in session-order slots (idx-start) - phase 2 consumes them in ascending order
     # regardless of completion order. On resume, extract only from resume_from (earlier session
     # extracts are unused in phase 2).
     extracts: list[Any] = [None] * n
@@ -372,7 +372,7 @@ def _commit_all_sessions(
         for i in range(resume_from, end):
             extracts[i - start] = _extract_one(i)
 
-    # ── Phase 2: build (ascending session idx, sequential) + per-session checkpoint ──
+    # -- Phase 2: build (ascending session idx, sequential) + per-session checkpoint --
     #   Save a full snapshot at that point right after each session's commit_prepared.
     #   Even before commit finishes for all sessions, you can restore an arbitrary checkpoint to check
     #   intermediate QA performance over "sessions processed so far" (future leakage is blocked by
@@ -410,7 +410,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
 
     session_filter (run_cfg):
       'all'  : all sessions (default)
-      'even' : 0-based even index (i=0,2,4,...) — ablation standard
+      'even' : 0-based even index (i=0,2,4,...) - ablation standard
       'odd'  : 0-based odd index  (i=1,3,5,...)
 
     checkpoint_path: if given, overwrite-save a partial result every checkpoint_every sessions.
@@ -420,17 +420,17 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     answer_llm: an LLM for final QA answering, independent of commit/build.
       None (default) -> answer also uses `llm` (100% identical to existing behavior).
       If set -> commit/build uses `llm` (original budget, e.g., 6000), and answer (QA generation)
-      uses `answer_llm` (e.g., budget 10000). The memory code is unmodified — the split is done by
+      uses `answer_llm` (e.g., budget 10000). The memory code is unmodified - the split is done by
       swapping memory.llm to the right LLM right before commit / right before answer (both
       memory.answer/commit read self.llm). For baselines (a_mem/hipporag2/mem0), commit() is a live
-      LLM build and answer()'s final generation is self.llm.generate — so the swap separates them exactly.
+      LLM build and answer()'s final generation is self.llm.generate - so the swap separates them exactly.
 
     commit_only: if True, commit() all sessions, save only the snapshot, and skip QA (answer
       generation). Snapshot-build-only mode. Returns with empty records (summary.commit_only=True).
-      If snapshot_dir is unset, commit still runs but there is nothing to save, so it only warns —
+      If snapshot_dir is unset, commit still runs but there is nothing to save, so it only warns -
       normally used together with snapshot_dir. Default False (existing behavior: commit+QA).
 
-    result_json_path / save_every_sessions / resume — per-session incremental save + resume after
+    result_json_path / save_every_sessions / resume - per-session incremental save + resume after
       interruption (for oracle=run_baseline and the grid entry=run_groupchat_mem):
       - result_json_path=None (default) -> incremental/resume disabled, 100% identical behavior
         (summary is accumulator-based, records = the result list). commit_only=True forces it off
@@ -438,23 +438,23 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
       - result_json_path set -> this function owns that JSON file:
           (a) resume=True and the file exists -> load; skip QA for already-scored sessions (record
               exists + is_correct not None), and QA only the incomplete eligible (session_filter-passing)
-              sessions. (If rerun_sessions is specified, target that set exactly — explicit wins.)
+              sessions. (If rerun_sessions is specified, target that set exactly - explicit wins.)
           (b) atomic-save the merged (existing done + new) result every save_every_sessions and at exit.
           (c) if every eligible session is already done, skip commit/QA and return the existing result.
         The returned records/summary are also merged. summary.resume_complete=True means no eligible
         sessions remain (= complete). thinking-ON nondeterminism note: never regenerate/overwrite the
         answer/record of an already-scored session.
     """
-    # Log all LLM prompts + responses (for baseline experiments) — if run.log_prompts: true, wrap
+    # Log all LLM prompts + responses (for baseline experiments) - if run.log_prompts: true, wrap
     #   the base llm in LoggingLLM. *Every* self.llm.generate(_structured) call in the baseline
     #   (note/evolution/openie/filter/fact/update/QA, etc.) is recorded as JSONL. If unset, behavior
     #   is unchanged. Path: run.log_prompts_dir (default log/baseline_prompts/{memory_name}) /
     #   {llm}.prompts.jsonl.
     if run_cfg.get("log_prompts"):
         from groupchat_qa.client import LoggingLLM
-        # Add data_type/trial to the default path — otherwise the same memory x LLM run with different
+        # Add data_type/trial to the default path - otherwise the same memory x LLM run with different
         #   trial / data_type accumulates into the same file, blocking split during analysis.
-        # None-safe — `.get(k, default)` does not apply the default when the key exists but the value
+        # None-safe - `.get(k, default)` does not apply the default when the key exists but the value
         # is None. `or 'unknown_dt'` treats falsy as default too. Same for trial.
         _dt = mem_cfg.get('data_type') or 'unknown_dt'
         _tr = mem_cfg.get('trial') if mem_cfg.get('trial') is not None else 0
@@ -462,7 +462,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
             f"log/baseline_prompts/{mem_cfg.get('name', 'mem')}/{_dt}/t{_tr}"
         )
         _ldir = run_cfg.get("log_prompts_dir") or _default_dir
-        # Record trial/data_type/ie_type as extra_metadata — enables per-grid-cell analysis in ablation
+        # Record trial/data_type/ie_type as extra_metadata - enables per-grid-cell analysis in ablation
         #   and trial separation in simulate.
         _extra_meta = {
             "llm_name": llm_name,
@@ -473,14 +473,14 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         }
         llm = LoggingLLM(llm, Path(_ldir) / f"{llm_name}.prompts.jsonl", extra_metadata=_extra_meta)
         logging.info(f"[{llm_name}] LLM prompt logging enabled -> {Path(_ldir) / f'{llm_name}.prompts.jsonl'}")
-        # Log answer_llm to the same file too (commit/answer accumulate into one prompts.jsonl — call_idx
+        # Log answer_llm to the same file too (commit/answer accumulate into one prompts.jsonl - call_idx
         #   monotonic). Keeps logging consistent even if answer_llm is a separate instance.
         if answer_llm is not None:
             answer_llm = LoggingLLM(
                 answer_llm, Path(_ldir) / f"{llm_name}.prompts.jsonl", extra_metadata=_extra_meta
             )
 
-    # commit/answer budget split — if answer_llm is set, swap memory.llm per stage.
+    # commit/answer budget split - if answer_llm is set, swap memory.llm per stage.
     #   Default self.llm = `llm` for commit/build. Set answer_llm right before answer, and set llm
     #   back right before commit. If answer_llm=None, _answer_llm = llm (= single LLM, existing
     #   behavior, swap is a no-op).
@@ -503,14 +503,14 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         )
     memory = make_memory(name=mem_cfg["name"], llm=_commit_llm, embedder=embedder, cfg=mem_cfg)
 
-    # snapshot/restore wiring — optionally absorb build cost.
+    # snapshot/restore wiring - optionally absorb build cost.
     #   If mem_cfg["snapshot_dir"] is set, use a per-LLM snapshot file (`{name}.{llm}.snapshot.pkl`):
     #     - file exists -> restore, skipping the all-session commit (retrieve filters future sessions
     #       by current_session_idx, so preloading the full memory is still point-accurate = same result
     #       as a live build).
     #     - not exists -> commit as usual, then save a snapshot at the end of the loop -> reused next run.
     #   Unset (default) keeps existing behavior (live commit every run). Common to a_mem/mem0/hipporag2/groupchat_mem.
-    #   Note: snapshot_dir must be unique per (dataset, trial, data_type, ie_type, config) — do not
+    #   Note: snapshot_dir must be unique per (dataset, trial, data_type, ie_type, config) - do not
     #      reuse another experiment's output, so the caller must separate paths per experiment.
     snapshot_path: Path | None = None
     restored = False
@@ -526,7 +526,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                 logging.warning(f"[{llm_name}] snapshot restore failed ({e}) -> proceeding with live commit")
                 restored = False
 
-    # If no_history, skip commit (KG build) entirely — answer does not use the KG/retrieval
+    # If no_history, skip commit (KG build) entirely - answer does not use the KG/retrieval
     #   (it uses only the no-history prompt), so the build result is discarded (wasteful). Treated the
     #   same as restored (snapshot reuse). Baselines (a_mem/mem0/hippo) have no no_history attribute ->
     #   getattr default False -> no effect (existing behavior preserved).
@@ -561,7 +561,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
             Path(_snap_dir) / f"{_ckpt_name}_ckpt" / f"tpn{_tpn}" / llm_name
         )
 
-    # a_mem's official generate_query_llm — precompute (cache) question keywords before QA.
+    # a_mem's official generate_query_llm - precompute (cache) question keywords before QA.
     #   No-op if use_query_keywords=False (default). Other baselines (mem0/hippo/groupchat_mem) lack this method
     #   (hasattr branch). Keywords depend on question text, so no future leakage.
     if hasattr(memory, "precompute_query_keywords"):
@@ -575,7 +575,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     end = min(int(run_cfg.get("end_session_idx", len(sessions))), len(sessions))
     sess_filter = run_cfg.get("session_filter", "all")
 
-    # session_filter validation — prevents a bad value from silently becoming a no-op.
+    # session_filter validation - prevents a bad value from silently becoming a no-op.
     if sess_filter not in {"all", "even", "odd", ""}:
         raise ValueError(f"session_filter must be all/even/odd, got {sess_filter!r}")
 
@@ -585,7 +585,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     total_latency = 0.0
     t0 = time.perf_counter()
 
-    # Per-cell question parallelism — if answer_max_workers > 1:
+    # Per-cell question parallelism - if answer_max_workers > 1:
     #   (1) commit all sessions in order first (or snapshot-restore), then
     #   (2) call answer (QA) in parallel via a ThreadPool (vLLM batching, using max-num-seqs).
     #   retrieve filters by current_session_idx (session_idx < current), so post-full-commit answers
@@ -594,7 +594,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     #   (write) is sequential. default=1 keeps the interleaved (answer -> commit) sequential behavior
     #   (baseline-safe).
     answer_max_workers = max(1, int(run_cfg.get("answer_max_workers", 1)))
-    # commit extract parallelism (phase 1) — distribute commit's session-independent LLM extraction
+    # commit extract parallelism (phase 1) - distribute commit's session-independent LLM extraction
     #   (OpenIE/note/fact) over the endpoint pool via a ThreadPool. If unset, safe default:
     #   answer_max_workers if set (same endpoint-pool distribution scale), else 1 (existing sequential
     #   commit). build (phase 2) is always sequential, so it is unaffected.
@@ -610,7 +610,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     qa_eval_mode = str(run_cfg.get("qa_eval_mode", "mcq")).lower()
     fuzzy_floor = float(run_cfg.get("fuzzy_floor", 0.0))
 
-    # ── Prepare per-session incremental save + resume after interruption ──
+    # -- Prepare per-session incremental save + resume after interruption --
     #   If result_json_path is set, this function owns that JSON file (load -> resume -> incremental
     #   save -> final merged save). Disabled (forced None) if commit_only (there are no records).
     _result_json_path = None if commit_only else result_json_path
@@ -665,7 +665,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
             )
 
     def _summary_from_records(recs: list[dict], wall: float, complete: bool = False) -> dict:
-        """Recompute summary from merged records (token/latency also summed from records — equivalent to the accumulator)."""
+        """Recompute summary from merged records (token/latency also summed from records - equivalent to the accumulator)."""
         _ns = sum(1 for r in recs if r.get("is_correct") is not None)
         _nc = sum(1 for r in recs if r.get("is_correct"))
         return {
@@ -692,7 +692,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         """
         new_recs = [r for r in results if r is not None]
         if not existing_order and not existing_by_idx:
-            return new_recs   # fresh run — nothing existing.
+            return new_recs   # fresh run - nothing existing.
         by_idx = dict(existing_by_idx)
         order = list(existing_order)
         seen = set(order)
@@ -710,7 +710,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         return [by_idx[_si] for _si in order]
 
     def _flush_result_json(complete: bool = False) -> None:
-        """Atomic-save the merged result so far (best-effort — failure does not kill the experiment)."""
+        """Atomic-save the merged result so far (best-effort - failure does not kill the experiment)."""
         if _result_json_path is None:
             return
         try:
@@ -741,7 +741,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         do_qa = not (sess_filter == "even" and i % 2 != 0) and not (sess_filter == "odd" and i % 2 != 1)
         # If rerun_sessions is set, reprocess only those session_idx (skip do_qa for the rest).
         #   Used to patch only the missing (timeout) n_scored-violating sessions in the existing result.
-        #   Target session_idx directly (do NOT assume it equals list index i) — ignore even_filter
+        #   Target session_idx directly (do NOT assume it equals list index i) - ignore even_filter
         #   (rerun_sessions is already the exact set of scoring targets). commit runs for all sessions
         #   regardless of do_qa (handled separately below).
         if rerun_sessions is not None:
@@ -756,7 +756,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
             try:
                 # The answer (QA generation) stage uses _answer_llm (e.g., budget 10000).
                 #   If _answer_llm == _commit_llm, this is a no-op (existing behavior). The swap is
-                #   idempotent — parallel answer threads set it to the same value, so no harmful race.
+                #   idempotent - parallel answer threads set it to the same value, so no harmful race.
                 memory.llm = _answer_llm
                 text, retrieval, metrics = memory.answer(q, current_session_idx=s.idx, current_session=s)
                 if qa_eval_mode == "generative":
@@ -772,7 +772,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                 rec.update({
                     "question": q.text, "questioner": q.questioner, "options": list(q.options),
                     "true_answer": q.true_answer, "model_answer_raw": text, "model_answer": processed,
-                    # Preserve raw output — the reasoning-parser-separated thinking trace.
+                    # Preserve raw output - the reasoning-parser-separated thinking trace.
                     "model_answer_reasoning": retrieval.extra.get("qa_reasoning_text", ""),
                     # For post-hoc analysis: the final QA prompt + retrieval's rendered triple/history.
                     "final_qa_prompt": retrieval.extra.get("qa_final_prompt", ""),
@@ -780,7 +780,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     "is_correct": is_correct, "hop_count": q.hop_count, "route_label": q.route_label,
                     "route": retrieval.extra.get("route"), "fallback_from": retrieval.extra.get("fallback_from"),
                     "records_path_info": retrieval.extra.get("records_path_info"),
-                    # retrieval recall: B (full retrieved set) / C (set included in the QA prompt) — per session.
+                    # retrieval recall: B (full retrieved set) / C (set included in the QA prompt) - per session.
                     #   non-enhanced: retrieval_b/c (per route: session route=dialogue{session_idx} /
                     #     record route=record{h,r,t,sd}).
                     #   enhanced: retrieval_b/c_{sessions,records} (session-path=dialogue, record-path separated).
@@ -793,7 +793,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     "latency_sec": metrics.latency_sec, "input_tokens": metrics.input_tokens,
                     "output_tokens": metrics.output_tokens, "num_llm_calls": metrics.num_llm_calls,
                 })
-                # ─────────────────────── legacy-style per-session log ──
+                # ----------------------- legacy-style per-session log --
                 logging.info(
                     "\n{Start answering question}\n"
                     "========================================\n"
@@ -845,7 +845,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
     memory.llm = _commit_llm
 
     if commit_only:
-        # ── commit-only (snapshot build) mode — commit all sessions, save only the snapshot, skip QA ──
+        # -- commit-only (snapshot build) mode - commit all sessions, save only the snapshot, skip QA --
         #   If restored (snapshot already exists), skip commit too (already built). If snapshot_dir is
         #   unset, commit runs but there is nothing to save -> warn (the built result is discarded).
         if not restored:
@@ -861,7 +861,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     logging.warning(f"[{llm_name}] (commit-only) snapshot save failed: {e}")
             else:
                 logging.warning(
-                    f"[{llm_name}] commit_only=True but snapshot_dir is unset — "
+                    f"[{llm_name}] commit_only=True but snapshot_dir is unset - "
                     f"the built result is not saved (QA skipped too). Setting snapshot_dir is recommended."
                 )
         else:
@@ -878,7 +878,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         return {"summary": summary, "records": []}
 
     if answer_max_workers > 1:
-        # ── Phase 1: commit all (session order) — skip if restored/no_history ──
+        # -- Phase 1: commit all (session order) - skip if restored/no_history --
         if not _skip_commit:
             # commit 2-phase parallel (extract in parallel -> build sequential).
             _commit_all_sessions(memory, sessions, start, end, llm_name, commit_extract_workers,
@@ -891,7 +891,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                     logging.info(f"[{llm_name}] memory snapshot saved -> {snapshot_path}")
                 except Exception as e:
                     logging.warning(f"[{llm_name}] snapshot save failed: {e}")
-        # ── Phase 2: answer in parallel (vLLM batching) ──
+        # -- Phase 2: answer in parallel (vLLM batching) --
         logging.info(f"[{llm_name}] answer parallel start (max_workers={answer_max_workers}, sessions={end - start})")
         done_cnt = 0
         with ThreadPoolExecutor(max_workers=answer_max_workers) as pool:
@@ -914,7 +914,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                 if _save_every and done_cnt % _save_every == 0:
                     _flush_result_json(complete=False)
     else:
-        # ── existing sequential (answer -> commit interleaved) — default, baseline-safe ──
+        # -- existing sequential (answer -> commit interleaved) - default, baseline-safe --
         for i in range(start, end):
             _, rec, m = _process_qa(i)
             results[i - start] = rec
@@ -958,7 +958,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         _flush_result_json(complete=complete)   # final atomic save (reflects the complete flag).
         return {"summary": summary, "records": merged}
 
-    # Existing path (result_json_path unused) — accumulator-based summary, 100% identical behavior.
+    # Existing path (result_json_path unused) - accumulator-based summary, 100% identical behavior.
     n_scored = sum(1 for r in results if r.get("is_correct") is not None)
     n_correct = sum(1 for r in results if r.get("is_correct"))
     summary = {
@@ -1003,13 +1003,13 @@ def run(
     """
     cfg_d = cfg.asdict() if isinstance(cfg, Config) else cfg
     # run: guard against AttributeError when the key exists but the value is None (yaml has `run:`
-    #   with no children) — None.get would fail.
+    #   with no children) - None.get would fail.
     seed_everything(int((cfg_d.get("run") or {}).get("seed", 42)))
 
     # commit_only: arg takes priority; if unset (None), use cfg.run.commit_only (default False).
     if commit_only is None:
         commit_only = bool((cfg_d.get("run") or {}).get("commit_only", False))
-    # answer budget — reasoning limit at final-QA-answering time (independent of cache budget).
+    # answer budget - reasoning limit at final-QA-answering time (independent of cache budget).
     #   Unset -> None (single LLM, existing behavior). The grid entry reads method_cfg.qa.answer_budget;
     #   this entry reads top-level cfg.qa.answer_budget.
     _answer_budget = (cfg_d.get("qa") or {}).get("answer_budget")
@@ -1023,7 +1023,7 @@ def run(
             raise ValueError(f"names given in --llms not found in cfg.llms: {sorted(missing)}")
         llms_list = filtered
 
-    # Pre-ping every vLLM endpoint — raise immediately if any is dead.
+    # Pre-ping every vLLM endpoint - raise immediately if any is dead.
     for llm_cfg in llms_list:
         _check_vllm_endpoint(llm_cfg)
 
@@ -1031,10 +1031,10 @@ def run(
     embedder = make_embedder(backend=emb_cfg["backend"], model=emb_cfg["model"])
 
     data_cfg = dict(cfg_d["data"])
-    # assistant == QA policy — load the bundle per LLM.
+    # assistant == QA policy - load the bundle per LLM.
     per_llm_mode = bool(data_cfg.get("per_llm_precomputed", False))
 
-    # File-backed embedding cache — if `embedder.cache: true`, wrap the base embedder in
+    # File-backed embedding cache - if `embedder.cache: true`, wrap the base embedder in
     #   CachedEmbedder: look up the cache per embedding target -> use on hit, on miss embed live then
     #   add + save (autoflush) -> reused by later sessions/runs. Each text is embedded once regardless
     #   of LLM/session. If path is unset, {dataset_root}/{data_type}/baseline_emb_cache.{model}.pickle.
@@ -1044,7 +1044,7 @@ def run(
         if not _cpath:
             _safe = embedder.name.replace(":", "_").replace("/", "_")
             # Guard against KeyError when dataset_root is absent (v1_2_1 format has only pickle_path)
-            #   — fall back to the parent directory of pickle_path.
+            #   - fall back to the parent directory of pickle_path.
             _root = data_cfg.get("dataset_root") or str(
                 Path(data_cfg.get("pickle_path", ".")).parent
             )
@@ -1059,7 +1059,7 @@ def run(
     _data_format = data_cfg.get("format", "v1_2_2")  # "v1_2_1" | "v1_2_2" (default)
     if not per_llm_mode:
         if _data_format == "v1_2_1":
-            # legacy raw pickle loader — reproduce/data/{data_type}/{ie_type}/trial{N}.pickle
+            # legacy raw pickle loader - reproduce/data/{data_type}/{ie_type}/trial{N}.pickle
             shared_bundle = load_v1_2_1_trial(pickle_path=data_cfg["pickle_path"])
         else:
             shared_bundle = load_converted_dataset(
@@ -1070,13 +1070,13 @@ def run(
                 normalization=data_cfg.get("normalization", "raw"),
             )
 
-    # deepcopy — a nested dict (cos_sim settings, etc.) shared across threads would race.
+    # deepcopy - a nested dict (cos_sim settings, etc.) shared across threads would race.
     # Aligned with the deepcopy pattern in the grid entry (asymmetry fix).
     mem_cfg_base = copy.deepcopy(cfg_d["memory"])
     # run: guard against a None value for the key.
     run_cfg = dict(cfg_d.get("run") or {})
 
-    # Prefer the yaml's parallel_max_workers, default 1 (not len(llms_list) — avoids endpoint overload).
+    # Prefer the yaml's parallel_max_workers, default 1 (not len(llms_list) - avoids endpoint overload).
     max_workers = int(run_cfg.get("parallel_max_workers", 1))
     max_workers = max(1, min(max_workers, len(llms_list)))
 
@@ -1086,7 +1086,7 @@ def run(
             raise KeyError(f"LLM cfg has neither name nor model_name: {llm_cfg!r}")
         llm_name = llm_cfg.get("name", llm_cfg["model_name"])
         logging.info(f"[run_baseline] sweep LLM: {llm_name} ({_resolve_base_url(llm_cfg)})")
-        # per-session incremental save + resume variables — computed outside try (before bundle load,
+        # per-session incremental save + resume variables - computed outside try (before bundle load,
         #   so unaffected by exceptions and safely referenced in the save block below). Resume is
         #   active only on a normal launch (not explicit --rerun-missing, not commit_only); run_one_llm
         #   owns the _p JSON (load -> resume -> incremental -> final).
@@ -1114,7 +1114,7 @@ def run(
                     ie_type=data_cfg.get("ie_type", "openie"),
                     normalization=data_cfg.get("normalization", "raw"),
                     per_llm_name=llm_name,
-                    # Pass cache_budget — in sync with the grid entry. If omitted, the per-llm
+                    # Pass cache_budget - in sync with the grid entry. If omitted, the per-llm
                     #   record/route cache would load from top-level (non-budget) and ignore the b06000
                     #   cache. None keeps existing behavior.
                     cache_budget=mem_cfg_base.get("cache_budget"),
@@ -1133,7 +1133,7 @@ def run(
                 bundle = shared_bundle
             sessions = bundle["sessions"]
             questions = bundle["questions"]
-            # deepcopy — a nested dict mutation (e.g., cos_sim_rerank settings) shared across threads
+            # deepcopy - a nested dict mutation (e.g., cos_sim_rerank settings) shared across threads
             # would race. Same policy as the grid entry.
             mem_cfg = copy.deepcopy(mem_cfg_base)
             # Auto-inject the keys the memory's _init_embedding_caches expects (previously not injected,
@@ -1155,7 +1155,7 @@ def run(
                 mem_cfg["context_size"] = max(512, _cs)  # lower-bound guard (avoids negative/too-small)
             mem_cfg["ie_type"] = data_cfg.get("ie_type", "openie")
             mem_cfg["normalization"] = data_cfg.get("normalization", "raw")
-            # None fallback — with yaml `embedder.model: null`, .get("model", default) returns None
+            # None fallback - with yaml `embedder.model: null`, .get("model", default) returns None
             # (the value is None, not a missing key), yielding cache path `.../None/...`. Use `or default`
             # so None also becomes the default (prevents silent miss).
             _embedder_model = (cfg_d.get("embedder") or {}).get("model") or "text-embedding-3-small"
@@ -1163,7 +1163,7 @@ def run(
             # Inject precomputed query nodes (per_llm mode, same pattern as the grid entry).
             #   key = session_idx (= current_session_idx). If present, skip the query-node LLM call on the
             #   record route.
-            # precomputed query nodes — load the per-K nq{K} cache (K = num_query_nodes), same convention
+            # precomputed query nodes - load the per-K nq{K} cache (K = num_query_nodes), same convention
             #   as the grid entry. Fallback: nq{K} absent -> query_node_{norm}.json ->
             #   bundle["query_nodes"] -> {} (live extraction).
             _K = mem_cfg.get("num_query_nodes")
@@ -1197,7 +1197,7 @@ def run(
                 _bundle_trial = bundle.get("trial_idx")
                 if _bundle_trial is not None and _bundle_trial != _trial_idx:
                     _msg = (
-                        f"[run_baseline] shared_bundle trial mismatch — bundle.trial={_bundle_trial} vs mem_cfg.trial={_trial_idx}. "
+                        f"[run_baseline] shared_bundle trial mismatch - bundle.trial={_bundle_trial} vs mem_cfg.trial={_trial_idx}. "
                         f"In non-per-LLM mode the module-level shared_bundle is loaded for a single trial only. "
                         f"cos_sim_rerank's record_emb may be the wrong trial. "
                         f"If you need per-trial-accurate record_emb, use per_llm_precomputed=true or launch a single-trial run."
@@ -1205,9 +1205,9 @@ def run(
                     logging.error(_msg)
                     raise ValueError(_msg)
             _seed = int((cfg_d.get("run") or {}).get("seed", 42))
-            # LLM for commit/build (original budget — cfg's thinking_token_budget as-is).
+            # LLM for commit/build (original budget - cfg's thinking_token_budget as-is).
             llm = _make_llm_from_cfg(llm_cfg, seed=_seed)
-            # answer budget split — if answer_budget is set, create a separate budget-overridden LLM
+            # answer budget split - if answer_budget is set, create a separate budget-overridden LLM
             #   for final QA answering. If unset (None), answer_llm=None (run_one_llm uses the commit
             #   llm for answer too = existing behavior).
             answer_llm = None
@@ -1218,7 +1218,7 @@ def run(
                     answer_llm = _make_llm_from_cfg(_ans_cfg, seed=_seed)
             ckpt_path = None
             if checkpoint_per_llm is not None:
-                # Add PID — avoids ckpt collisions when the same LLM runs in parallel.
+                # Add PID - avoids ckpt collisions when the same LLM runs in parallel.
                 import os as _os
                 ckpt_path = checkpoint_per_llm.with_name(
                     checkpoint_per_llm.name + f".{llm_name}.pid{_os.getpid()}.ckpt.pkl"
@@ -1230,7 +1230,7 @@ def run(
                               result_json_path=(_p if _use_resume else None),
                               save_every_sessions=_save_every, resume=_use_resume)
         except Exception as e:
-            # Catch so one LLM thread's failure does not affect others — return an empty result.
+            # Catch so one LLM thread's failure does not affect others - return an empty result.
             # A partial failure is an inconvenience; proceed automatically.
             logging.error(f"[run_baseline] [{llm_name}] thread failed: {type(e).__name__}: {e}", exc_info=True)
             out = {"summary": {"llm": llm_name, "n_sessions": 0, "n_scored": 0, "n_correct": 0,
@@ -1239,7 +1239,7 @@ def run(
                                "total_input_tokens": 0, "total_output_tokens": 0,
                                "error": f"{type(e).__name__}: {e}"},
                    "records": []}
-        # Partial save immediately inside the thread — protects long-running experiments.
+        # Partial save immediately inside the thread - protects long-running experiments.
         if _p is not None:
             try:
                 if _rr and _p.exists():
@@ -1267,16 +1267,16 @@ def run(
                     logging.info(f"[run_baseline rerun] patched {len(_new)}/{len(_rr)} sessions -> {_p}")
                 elif _use_resume:
                     # resume path: run_one_llm already owns and atomic-saved _p (incremental + final).
-                    #   A duplicate (non-atomic) caller write risks truncation/overwrite, so skip it —
+                    #   A duplicate (non-atomic) caller write risks truncation/overwrite, so skip it -
                     #   but on thread error, preserve the disk partial (out may be an empty-records error).
                     logging.info(f"[run_baseline] resume-owned result saved (run_one_llm): {llm_name} -> {_p}")
                 elif not out.get("summary", {}).get("error"):
-                    # non-resume path (e.g., commit_only) — save out (atomic). On thread error, skip to preserve disk.
+                    # non-resume path (e.g., commit_only) - save out (atomic). On thread error, skip to preserve disk.
                     _atomic_write_json(_p, out)
                     logging.info(f"[run_baseline] partial save: {llm_name} -> {_p}")
                 else:
                     logging.warning(
-                        f"[run_baseline] {llm_name} thread error — preserving existing result (skip overwrite): {_p}")
+                        f"[run_baseline] {llm_name} thread error - preserving existing result (skip overwrite): {_p}")
             except Exception as e:
                 logging.warning(f"[run_baseline] partial save failed ({llm_name}): {e}")
         return llm_name, out
@@ -1296,18 +1296,18 @@ def run(
                         outputs[name] = out
                 except Exception:
                     # One thread raised -> cancel unstarted futures. Already-running threads continue
-                    # in the background (Python ThreadPoolExecutor limitation — cannot force-terminate).
+                    # in the background (Python ThreadPoolExecutor limitation - cannot force-terminate).
                     # Partial results are preserved via save_per_llm.
                     for f in futures:
                         f.cancel()
                     logging.error(
-                        "[run_baseline] LLM thread failed — unstarted futures canceled. "
+                        "[run_baseline] LLM thread failed - unstarted futures canceled. "
                         "Background running threads continue to completion (Python limitation). "
                         "Partial results are preserved at the save_per_llm path."
                     )
                     raise
     finally:
-        # If CachedEmbedder, flush the cache to disk at exit (normal or exception) — persist embeddings
+        # If CachedEmbedder, flush the cache to disk at exit (normal or exception) - persist embeddings
         #   still in memory (autoflush-interval leftovers) so the next run reuses them.
         if isinstance(embedder, CachedEmbedder):
             try:
@@ -1327,7 +1327,7 @@ def main() -> None:
     parser.add_argument("--llms", type=str, default="",
                         help="comma-separated LLM names. If omitted, sweep all of cfg.llms.")
     parser.add_argument("--commit-only", action="store_true",
-                        help="Do only commit+snapshot and skip QA (answer) — snapshot build only. "
+                        help="Do only commit+snapshot and skip QA (answer) - snapshot build only. "
                              "If unset, uses cfg.run.commit_only (default False).")
     parser.add_argument("--rerun-missing", action="store_true",
                         help="Reprocess only the missing sessions (is_correct=None, timeout, etc.) in an "
@@ -1364,7 +1364,7 @@ def main() -> None:
                 _rerun_map[_ln] = _miss
                 logging.info(f"[rerun] {_ln}: {len(_miss)} missing sessions to reprocess")
         if not _rerun_map:
-            logging.info("[rerun] 0 missing sessions — nothing to reprocess. Exiting."); return
+            logging.info("[rerun] 0 missing sessions - nothing to reprocess. Exiting."); return
 
     # save_per_llm=args.out -> each thread disk-saves its own result on completion.
     outputs = run(cfg, llm_names=llm_names, save_per_llm=args.out, commit_only=_commit_only,
@@ -1386,7 +1386,7 @@ def main() -> None:
         if not out.get("summary", {}).get("error"):
             _atomic_write_json(p, out)
         else:
-            logging.warning(f"[run_baseline] {llm_name} thread error — preserving existing result (skip final re-save): {p}")
+            logging.warning(f"[run_baseline] {llm_name} thread error - preserving existing result (skip final re-save): {p}")
         print(f"=== {llm_name} -> {p} ===")
         print(json.dumps(out["summary"], indent=2, ensure_ascii=False))
 

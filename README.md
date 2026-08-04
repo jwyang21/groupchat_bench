@@ -14,7 +14,7 @@ multi-party group-chat histories.
 
 * * *
 
-## Overview 📚
+## Overview
 
 Group chats pose challenges that most dialogue benchmarks do not capture: **multi-party
 grounding** (who an utterance concerns and how it fits the relationships among
@@ -26,38 +26,38 @@ when each question is posed.
 
 **GroupChat-Mem** is a dual-view memory built online from the dialogue only:
 
-- **Relational memory R.** At each turn, an LLM performs **Open Information Extraction
+- **Relational memory $\mathcal{R}$.** At each turn, an LLM performs **Open Information Extraction
   (OpenIE)** over the (partial) session and produces **`[subject, relation, object]`**
-  records (open-schema — no predefined entity types or relation labels). Subjects and
+  records (open-schema - no predefined entity types or relation labels). Subjects and
   objects become nodes and relations become edges; each record carries its source
   session's timestamp. Records from different sessions are linked through shared nodes,
   forming a graph-structured relational memory. Re-extraction uses the *complete* partial
   session and **replaces** the previous extraction, so earlier records are revised as later
   utterances resolve references.
-- **Raw session repository S.** Each original session is stored verbatim, preserving exact
+- **Raw session repository $\mathcal{S}$.** Each original session is stored verbatim, preserving exact
   wording, local discourse context, and conversational nuances that a compressed
   representation may omit.
 
 Given a query, GroupChat-Mem retrieves evidence from **both** views in parallel and, if the
-initial answer is insufficient, performs a fine-grained traversal over R:
+initial answer is insufficient, performs a fine-grained traversal over $\mathcal{R}$:
 
-1. **From R** — the LLM identifies the top-**n** query-relevant nodes; a **two-hop**
+1. **From $\mathcal{R}$** - the LLM identifies the top-**n** query-relevant nodes; a **two-hop**
    neighborhood is built around each; the records are linearized, ranked by cosine
    similarity to the query (OpenAI embeddings), and the top-**k_r** records are kept.
-2. **From S** — each session is a retrieval unit; **k_s** sessions are retrieved,
+2. **From $\mathcal{S}$** - each session is a retrieval unit; **k_s** sessions are retrieved,
    **half by BM25** (lexical) and **half by embedding cosine similarity** (semantic).
-3. **Response** — the LLM generates an initial answer and judges its sufficiency. If
-   sufficient, it is returned. Otherwise GroupChat-Mem traverses R: it picks the most
+3. **Response** - the LLM generates an initial answer and judges its sufficiency. If
+   sufficient, it is returned. Otherwise GroupChat-Mem traverses $\mathcal{R}$: it picks the most
    query-relevant node among the retrieved records, expands one hop at a time, and
    re-answers after each hop, stopping when the answer is supported or at the **maximum hop
-   limit** — in which case it returns **"I don't know."**
+   limit** - in which case it returns **"I don't know."**
 
-R is induced purely from the observed dialogue; retrieval is reconstructed at each query's
+$\mathcal{R}$ is induced purely from the observed dialogue; retrieval is reconstructed at each query's
 timepoint so information from future sessions never leaks into a past question.
 
 * * *
 
-## Quick Starts 🚀
+## Quick Starts
 
 ### 1. Installation
 
@@ -68,7 +68,7 @@ pip install -r requirements.txt
 
 ### 2. Environment Variables
 
-- `OPENAI_API_KEY` — used for the OpenAI embeddings (`text-embedding-3-small`) in retrieval.
+- `OPENAI_API_KEY` - used for the OpenAI embeddings (`text-embedding-3-small`) in retrieval.
 - A local **vLLM** endpoint serving the QA backbone via an OpenAI-compatible API. Set the
   endpoint's host/port in the config (`llms[].host` / `llms[].port`) or via the
   `VLLM_HOST` / `VLLM_PORT` placeholders shown in the example configs.
@@ -97,7 +97,7 @@ PYTHONPATH=src python src/run/run_baseline.py \
 
 * * *
 
-## Components ⚙️
+## Components
 
 ### Repository structure
 
@@ -124,10 +124,10 @@ PYTHONPATH=src python src/run/run_baseline.py \
 
 ### Data layout
 
-Configs point at a `dataset_root` per show — `friends`, `bigbang`, `theoffice`. Each show
+Configs point at a `dataset_root` per show - `friends`, `bigbang`, `theoffice`. Each show
 provides the chronological sessions and per-session candidate question sets. The `data_type`
-selects a character-name setting — `newname` (New Names, the default), `normal` (Original
-Names), or `shuffled` (the adversarial Swapped Names) — and `trial` selects one of the
+selects a character-name setting - `newname` (New Names, the default), `normal` (Original
+Names), or `shuffled` (the adversarial Swapped Names) - and `trial` selects one of the
 three sampled question sets used for the reported mean/standard deviation.
 
 The raw GroupChat-Bench data is available in this [link](https://drive.google.com/file/d/1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8/view?usp=sharing).
@@ -136,9 +136,9 @@ The raw GroupChat-Bench data is available in this [link](https://drive.google.co
 
 | Hyperparameter | Value | Meaning |
 |---|---|---|
-| `num_records` (k_r) | 250 | records kept from the relational memory R |
-| `num_sessions` (k_s) | 40 | sessions retrieved from the raw session repository S |
-| `num_query_nodes` (n) | 3 | top-n query-relevant nodes identified in R |
+| `num_records` (k_r) | 250 | records kept from the relational memory $\mathcal{R}$ |
+| `num_sessions` (k_s) | 40 | sessions retrieved from the raw session repository $\mathcal{S}$ |
+| `num_query_nodes` (n) | 3 | top-n query-relevant nodes identified in $\mathcal{R}$ |
 | `hop` | 2 | two-hop neighborhood built around each query node |
 | `max_hop` | 6 | maximum traversal hop limit |
 

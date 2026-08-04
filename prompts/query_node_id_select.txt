@@ -9,7 +9,7 @@ You are given a list of candidate subjects for the question. You must pick the f
 1. You should not directly answer the question, but only identify its subject.
 For example, if the question is 'Who was the vice president of Barack Obama?', you should not answer 'Joe Biden', even though he was actually Barack Obama's vice president.
 Instead, you should answer 'Barack Obama' because he is the main focus of the question.
-2. If the question contains a first-person pronoun ('I', 'my', 'me', 'mine') and the questioner appears in the given list, include the questioner as a subject — the questioner is highly likely to be the subject in this case.
+2. If the question contains a first-person pronoun ('I', 'my', 'me', 'mine') and the questioner appears in the given list, include the questioner as a subject - the questioner is highly likely to be the subject in this case.
 3. **You MUST choose the question subject(s) ONLY from the given list (verbatim). Do NOT output any entity that is not present in the given list, even if you think a better subject exists outside it. Anything outside the given list cannot be a valid subject.**
 4. If none of the items in the given list is the subject of the question, output an empty list.
 5. Your answer must be a list of strings, each element being EXACTLY one of the items in the given list (copy it verbatim).
@@ -49,7 +49,7 @@ Example 3.
 ========================================
 You are given a list of candidate subjects ({options}) for this question.
 Select up to {k} MOST LIKELY question subject(s) from this given list.
-    - Each question subject **MUST** be exactly one of the items in the given list (copy it verbatim) — never include any entity that is not in the given list.
+    - Each question subject **MUST** be exactly one of the items in the given list (copy it verbatim) - never include any entity that is not in the given list.
 Do NOT output any intermediate steps leading to the final answer.
 Your final output must be a list of strings, with each element being exactly one of the items in the given list.
 

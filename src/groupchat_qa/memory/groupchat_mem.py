@@ -1,13 +1,13 @@
-"""GroupChat-Mem — a dual-view memory for long-term multi-party group-chat QA.
+"""GroupChat-Mem - a dual-view memory for long-term multi-party group-chat QA.
 
 GroupChat-Mem maintains two complementary memory views, both induced online from the
 dialogue only:
 
-  * Relational memory R — a graph of ``[subject, relation, object]`` records produced by
+  * Relational memory R - a graph of ``[subject, relation, object]`` records produced by
     Open Information Extraction (OpenIE) over each incoming (partial) session. Subjects and
     objects are nodes, relations are edges, and each record carries its source session's
     timestamp. Records from different sessions are linked through shared nodes.
-  * Raw session repository S — each original session stored verbatim, preserving exact
+  * Raw session repository S - each original session stored verbatim, preserving exact
     wording and local discourse context.
 
 Given a query, evidence is retrieved from both views in parallel: the top-n query-relevant
@@ -75,13 +75,13 @@ def _get_or_create_cache(
 
     A second (or later) call with the same (path, model_name, dim) returns the same
     instance immediately. Attempting reuse with a different (model_name, dim) raises
-    ValueError — a caller bug.
+    ValueError - a caller bug.
     """
     key = str(path.resolve())
     with _CACHE_POOL_LOCK:
         existing = _CACHE_POOL.get(key)
         if existing is not None:
-            # Same path but different model/dim → caller-side error.
+            # Same path but different model/dim -> caller-side error.
             if existing.model_name != model_name or existing.dim != dim:
                 raise ValueError(
                     f"[_get_or_create_cache] path={key!r} is already "
@@ -100,7 +100,7 @@ def _get_or_create_cache(
 
 
 # ============================================================================
-# pydantic schema — structured LLM response for query-node identification
+# pydantic schema - structured LLM response for query-node identification
 # ============================================================================
 class QueryNodeList(BaseModel):
     """Response schema for query-node identification: a list of candidate node names."""
@@ -108,7 +108,7 @@ class QueryNodeList(BaseModel):
 
 
 # ============================================================================
-# Helpers — KG / dialogue index
+# Helpers - KG / dialogue index
 # ============================================================================
 @dataclass
 class RelationalGraph:
@@ -122,8 +122,8 @@ class RelationalGraph:
 
     def insert_record(self, head: str, relation: str, tail: str, ts: str,
                     sess_idx: int | None = None) -> None:
-        # BUG FIX: .capitalize() lowercased everything after the first word of a multi-word entity
-        # (e.g. "Lincoln High" → "Lincoln high", "Helen Willick-Bunch" → "Helen willick-bunch"),
+        # .capitalize() lowercased everything after the first word of a multi-word entity
+        # (e.g. "Lincoln High" -> "Lincoln high", "Helen Willick-Bunch" -> "Helen willick-bunch"),
         # corrupting the node form. Result: inaccurate entity spelling in the rendered prompt + dedup mismatch.
         # Fix: preserve the raw form. Case-insensitive matching is handled on the query side (`get_clean_entity` exact match).
         h = remove_quotes(remove_brackets(head.strip()))
@@ -138,7 +138,7 @@ class RelationalGraph:
         bucket = rel.setdefault(ts, [])
         if t not in bucket:
             bucket.append(t)
-        # Record sess_idx — if the same record appears in multiple sessions, keep the earliest (min).
+        # Record sess_idx - if the same record appears in multiple sessions, keep the earliest (min).
         #   Update even when t is already in the bucket, to reflect an earlier session. Skip if sess_idx is None (legacy).
         if sess_idx is not None:
             key = (h, r, t, ts)
@@ -157,13 +157,13 @@ class RelationalGraph:
     def nodes_until(self, current_session_idx: "int | None") -> list[str]:
         """Return only head/tail of records that appeared in sessions below current_session_idx (future-leakage guard).
 
-        - current_session_idx is None → the full nodes() (snapshot path — already a point-in-time-correct KG, no future record).
+        - current_session_idx is None -> the full nodes() (snapshot path - already a point-in-time-correct KG, no future record).
         - Entities of records without a recorded record_sess (sess_idx None) are kept (live commit always records,
           so this only happens on the snapshot path). The comparison `sess is None or sess < idx` matches the
           record-filter semantics of `_filter_records_by_timestamp`, ensuring temporal alignment between query_node options
           and retrieved records.
         - Unlike nodes(), the head `h` is not added unconditionally; it is added only when the (h,r,t,ts) record is
-          in the past → blocks exposure of entities that come only from future-only records.
+          in the past -> blocks exposure of entities that come only from future-only records.
         """
         if current_session_idx is None:
             return self.nodes()
@@ -191,14 +191,14 @@ class RelationalGraph:
           - A: copies only records of self.graph with sess_idx < current_session_idx (or sess_idx None = legacy/snapshot).
                Same temporal semantics as nodes_until / _filter_records_by_timestamp.
           - B: inserts extra_records (= current_session.partial_records) with sess_idx = current_session_idx.
-               Records of future sessions (>idx) enter through no path → future-leakage guard.
-        current_session_idx is None (snapshot path) → A is all of self.graph (already point-in-time-correct) + B.
+               Records of future sessions (>idx) enter through no path -> future-leakage guard.
+        current_session_idx is None (snapshot path) -> A is all of self.graph (already point-in-time-correct) + B.
 
         The returned RelationalGraph is the target C for query_node candidate nodes, 2-hop one_hop traversal, and
         _retrieve_by_timestamp. self.graph (permanent commit accumulation) is not mutated (read-only copy).
         """
         out = RelationalGraph()
-        # A — copy only records with sess_idx < idx (or None)
+        # A - copy only records with sess_idx < idx (or None)
         for h, rel_map in self.graph.items():
             for r, ts_map in rel_map.items():
                 for ts, tails in ts_map.items():
@@ -206,7 +206,7 @@ class RelationalGraph:
                         sess = self.record_sess.get((h, r, t, ts))
                         if current_session_idx is None or sess is None or sess < current_session_idx:
                             out.insert_record(h, r, t, ts, sess)
-        # B — current-session partial records (sess_idx = current_session_idx)
+        # B - current-session partial records (sess_idx = current_session_idx)
         if extra_records:
             for q in extra_records:
                 out.insert_record(q.head, q.relation, q.tail, q.start_date, current_session_idx)
@@ -272,7 +272,7 @@ class DialogueIndex:
 
 
 # ============================================================================
-# GroupChatMem — dual-view memory (relational memory R + raw session repository S)
+# GroupChatMem - dual-view memory (relational memory R + raw session repository S)
 # ============================================================================
 class GroupChatMem(Memory):
     """GroupChat-Mem: a dual-view memory that maintains a relational memory R
@@ -284,15 +284,15 @@ class GroupChatMem(Memory):
     the answer is supported or at the maximum hop limit ("I don't know.").
 
     Config keys (memory.*):
-      num_records        : k_r — number of relational records kept from R (paper default 250).
-      num_sessions       : k_s — number of sessions retrieved from S (paper default 40).
-      num_query_nodes    : n  — top-n query-relevant nodes identified in R (paper default 3).
+      num_records        : k_r - number of relational records kept from R (paper default 250).
+      num_sessions       : k_s - number of sessions retrieved from S (paper default 40).
+      num_query_nodes    : n  - top-n query-relevant nodes identified in R (paper default 3).
       hop                : two-hop neighborhood expansion around each query node (default 2).
       max_hop            : maximum traversal hop limit (default 6).
-      session_method     : 'bm25_only' / 'emb_only' / 'alternating' — how S is ranked
+      session_method     : 'bm25_only' / 'emb_only' / 'alternating' - how S is ranked
                            (paper: half BM25 + half embedding, i.e. 'alternating').
       bm25_first         : prefer BM25 first in 'alternating'.
-      record_format      : 'record' / 'sentence' — record rendering style.
+      record_format      : 'record' / 'sentence' - record rendering style.
       question_format    : 'multi_structured' / 'multi_unstructured' / 'open_ended'.
       cos_sim_rerank     : re-rank records by cosine similarity to the query (default True).
       fallback           : enable the iterative traversal when the initial answer is (E).
@@ -392,7 +392,7 @@ class GroupChatMem(Memory):
 
         # misc
         self.delimiter = cfg.get("delimiter", "=" * 40)
-        # Precomputed query nodes — {question_idx: [node, ...]} (optional; saves LLM calls).
+        # Precomputed query nodes - {question_idx: [node, ...]} (optional; saves LLM calls).
         #   If absent, query nodes are identified live via _identify_query_nodes.
         self.precomputed_query_nodes: dict[int, list[str]] = cfg.get("precomputed_query_nodes") or {}
         # Query-node identification is batched over the candidate node set.
@@ -406,7 +406,7 @@ class GroupChatMem(Memory):
 
         # Question embedding type axis (separate from record embedding).
         # temporal     = embed the whole question
-        # non_temporal = strip_question_timestamp(q) — remove timestamp + 1 time-preposition word before embedding
+        # non_temporal = strip_question_timestamp(q) - remove timestamp + 1 time-preposition word before embedding
         # default = "temporal".
         _qet_q = cfg.get("question_embedding_type", "temporal")
         if _qet_q not in ("temporal", "non_temporal"):
@@ -415,7 +415,7 @@ class GroupChatMem(Memory):
             )
         self.question_embedding_type: str = _qet_q
 
-        # Precomputed question embeddings (automatic lookup — shared across all ablation cells).
+        # Precomputed question embeddings (automatic lookup - shared across all ablation cells).
         # path = {dataset_root}/{data_type}/precomputed/per-trial/t{trial}/question_embeddings_{model_alias}.npz
         # embed_one fallback if absent.
         self._q_embed_map: dict[str, np.ndarray] = {}
@@ -443,7 +443,7 @@ class GroupChatMem(Memory):
                 self._q_embed_map = {str(q): embs[i] for i, q in enumerate(qs) if q is not None}
             except (OSError, ValueError, KeyError, EOFError) as e:
                 # On load failure, fall back (embed_one). Keep empty dict.
-                logging.warning("[GroupChatMem.__init__] q_embed_path load failed → fallback: %s", e)
+                logging.warning("[GroupChatMem.__init__] q_embed_path load failed -> fallback: %s", e)
                 self._q_embed_map = {}
 
         # Precomputed record embeddings (injected by the entry point via cfg["record_embeddings"]).
@@ -454,13 +454,13 @@ class GroupChatMem(Memory):
         self._record_emb_map: dict[str, Any] = cfg.get("record_embeddings") or {}
 
         # cos_sim re-rank toggle:
-        # True  → re-sort retrieved records by cosine similarity to the question, descending.
-        # False → skip re-sorting (keep BM25/record order). default = False.
+        # True  -> re-sort retrieved records by cosine similarity to the question, descending.
+        # False -> skip re-sorting (keep BM25/record order). default = False.
         self.cos_sim_rerank: bool = bool(cfg.get("cos_sim_rerank", False))
 
         # record embedding type toggle.
-        # "temporal"     → key = f"{h} {r} {t} on {sd}"  (includes start_date, build filename _temporal)
-        # "non_temporal" → key = f"{h} {r} {t}"          (build filename _non_temporal)
+        # "temporal"     -> key = f"{h} {r} {t} on {sd}"  (includes start_date, build filename _temporal)
+        # "non_temporal" -> key = f"{h} {r} {t}"          (build filename _non_temporal)
         # default = "non_temporal". simulate yaml overrides to "temporal".
         # Can be added as an ablation grid axis (config's grid memory.record_embedding_type).
         _qet = cfg.get("record_embedding_type", "non_temporal")
@@ -471,13 +471,13 @@ class GroupChatMem(Memory):
 
         # ====================================================================
         # 4 EmbeddingCache instances.
-        # None if the cfg key is absent — live embed fallback (existing behavior).
+        # None if the cfg key is absent - live embed fallback (existing behavior).
         # ====================================================================
         self._init_embedding_caches(cfg, embedder)
 
     # ====================================================================
-    # Embedding cache init — 4 kinds (entire_dialogue / partial_dialogue / question / record)
-    # Required cfg keys: dataset_root, data_type, trial — cache disabled if absent (live embed fallback).
+    # Embedding cache init - 4 kinds (entire_dialogue / partial_dialogue / question / record)
+    # Required cfg keys: dataset_root, data_type, trial - cache disabled if absent (live embed fallback).
     # The record cache additionally needs llm_name + ie_type + normalization.
     # ====================================================================
     def _init_embedding_caches(self, cfg: dict[str, Any], embedder: "Embedder") -> None:
@@ -492,9 +492,9 @@ class GroupChatMem(Memory):
         dt = cfg.get("data_type")
         trial = cfg.get("trial")
 
-        # Prevent a bug where dt=0 wrongly passes — isinstance + valid-value check.
+        # Prevent a bug where dt=0 wrongly passes - isinstance + valid-value check.
         if not isinstance(dt, str) or dt not in {"normal", "newname", "shuffled"}:
-            # Required key absent or invalid dt — disable cache. live embed fallback.
+            # Required key absent or invalid dt - disable cache. live embed fallback.
             return
         if not (ds_root and trial is not None):
             return
@@ -505,24 +505,24 @@ class GroupChatMem(Memory):
 
         # Use _get_or_create_cache to build EmbeddingCache.
         # Reuse the instance for the same path within the process (improves ablation throughput).
-        # autoflush_every=50 + fsync_on_flush=False — eases runtime hot-path latency
+        # autoflush_every=50 + fsync_on_flush=False - eases runtime hot-path latency
         # (the build script fills the cache in advance, so runtime misses are rare).
         _kw = dict(autoflush_every=50, fsync_on_flush=False)
 
         # Catch specific exceptions only, and emit an explicit warning instead of pass.
         try:
-            # entire dialogue — once per ds × dt (trial-independent)
+            # entire dialogue - once per ds x dt (trial-independent)
             self._entire_dialogue_cache = _get_or_create_cache(
                 ds_root / dt / "entire_session_embedding_cache.pickle",
                 embedder.name, embedder.dim, **_kw,
             )
-            # partial dialogue — ds × dt × trial
+            # partial dialogue - ds x dt x trial
             self._partial_dialogue_cache = _get_or_create_cache(
                 ds_root / dt / "precomputed" / "per-trial" / f"t{trial}"
                        / "partial_dialogues_embedding_cache.pickle",
                 embedder.name, embedder.dim, **_kw,
             )
-            # question — ds × dt × trial × type (temporal/non_temporal)
+            # question - ds x dt x trial x type (temporal/non_temporal)
             # question_embedding_type suffix.
             _q_suffix = self.question_embedding_type
             self._question_cache = _get_or_create_cache(
@@ -536,13 +536,13 @@ class GroupChatMem(Memory):
             self._partial_dialogue_cache = None
             self._question_cache = None
 
-        # record cache — per LLM × ie × normalization (only when LLM info is present)
+        # record cache - per LLM x ie x normalization (only when LLM info is present)
         llm_name = cfg.get("llm_name")
         ie_type = cfg.get("ie_type", "openie")
         norm = cfg.get("normalization", "raw")
         # cache_budget segment branch.
         #   data_loader reads the record json under `bNNNNN` in the LLM folder, so the record's embedding cache
-        #   must be read under the same segment for path consistency (absent → no segment = existing behavior).
+        #   must be read under the same segment for path consistency (absent -> no segment = existing behavior).
         from groupchat_qa.pipeline.data_loader import budget_segment as _budget_segment
         _bseg = _budget_segment(cfg.get("cache_budget"))
         if llm_name:
@@ -585,7 +585,7 @@ class GroupChatMem(Memory):
 
     # ------------------------------------------------------------------
     # Common handling of empty text.
-    # Return a uniform unit vec instead of a zero-vec → avoids cos_sim ZeroDivisionError.
+    # Return a uniform unit vec instead of a zero-vec -> avoids cos_sim ZeroDivisionError.
     # ------------------------------------------------------------------
     def _empty_vec(self) -> np.ndarray:
         dim = self.embedder.dim
@@ -597,7 +597,7 @@ class GroupChatMem(Memory):
         """entire dialogue embedding used by commit().
 
         Separates the partial pool of _session_order_adhoc from the cache-write path.
-        lookup: entire → partial chain. On miss, set in the entire cache.
+        lookup: entire -> partial chain. On miss, set in the entire cache.
         Convert live embed result to np.asarray(float32) before returning.
         """
         if not text:
@@ -609,7 +609,7 @@ class GroupChatMem(Memory):
             v = c.get(text)
             if v is not None:
                 return v
-        # miss → live embed + set in entire cache
+        # miss -> live embed + set in entire cache
         vec = np.asarray(self.embedder.embed_one(text), dtype=np.float32)
         if self._entire_dialogue_cache is not None:
             try:
@@ -621,8 +621,8 @@ class GroupChatMem(Memory):
     def _cached_partial_dialogue_embed(self, text: str) -> np.ndarray:
         """partial dialogue embedding used by the pool dialogue of _session_order_adhoc.
 
-        Fully separated from commit()'s entire-cache write path → prevents trial contamination.
-        lookup: partial → entire chain. On miss, set in the partial cache.
+        Fully separated from commit()'s entire-cache write path -> prevents trial contamination.
+        lookup: partial -> entire chain. On miss, set in the partial cache.
         Convert live embed result to np.asarray(float32) before returning.
         """
         if not text:
@@ -634,7 +634,7 @@ class GroupChatMem(Memory):
             v = c.get(text)
             if v is not None:
                 return v
-        # miss → live embed + set in partial cache
+        # miss -> live embed + set in partial cache
         vec = np.asarray(self.embedder.embed_one(text), dtype=np.float32)
         if self._partial_dialogue_cache is not None:
             try:
@@ -644,11 +644,11 @@ class GroupChatMem(Memory):
         return vec
 
     def _cached_question_embed(self, text: str) -> np.ndarray:
-        """question embedding — _q_embed_map (npz) first, cache as secondary, on miss live + cache.
+        """question embedding - _q_embed_map (npz) first, cache as secondary, on miss live + cache.
 
         When question_embedding_type=non_temporal, transform text with strip_question_timestamp before
         lookup/embed. When temporal, use text as-is.
-        The cache key is the transformed text → different cache files per temporal/non_temporal.
+        The cache key is the transformed text -> different cache files per temporal/non_temporal.
 
         Convert live embed result to np.asarray(float32).
         num_embedding_calls is a combined count including cache hits (not the OpenAI billable count).
@@ -676,7 +676,7 @@ class GroupChatMem(Memory):
         return vec
 
     def _cached_record_embed(self, key: str) -> np.ndarray:
-        """record embedding — _record_emb_map (build script output) first, cache as secondary, on miss live + cache.
+        """record embedding - _record_emb_map (build script output) first, cache as secondary, on miss live + cache.
 
         On _record_emb_map hit, also lazy-prime the partial cache (subsequent lookups go through a single cache.get path).
         Convert live embed result to np.asarray(float32).
@@ -746,9 +746,9 @@ class GroupChatMem(Memory):
         return metrics
 
     # ====================================================================
-    # retrieve — dispatcher
+    # retrieve - dispatcher
     # current_session: the Session object of the current session. Needed so _retrieve_sessions can add
-    # partial_dialogue + partial_embedding to the candidates. None → entire only (legacy).
+    # partial_dialogue + partial_embedding to the candidates. None -> entire only (legacy).
     # ====================================================================
     def retrieve(self, question: Question, current_session_idx: int,
                  current_session: "Session | None" = None) -> RetrievalResult:
@@ -801,7 +801,7 @@ class GroupChatMem(Memory):
         save_pickle(
             {
                 "graph": self._graph.graph,
-                # record→sess_idx map for future-leakage blocking. tuple keys are picklable.
+                # record->sess_idx map for future-leakage blocking. tuple keys are picklable.
                 "record_sess": self._graph.record_sess,
                 "dialogues": self._idx.dialogues,
                 "dates": self._idx.dates,
@@ -814,7 +814,7 @@ class GroupChatMem(Memory):
     def restore(self, path: str) -> None:
         d = load_pickle(path)
         self._graph.graph = d["graph"]
-        # Old-snapshot compat — empty dict if record_sess is absent (sess_idx None→keep, legacy behavior).
+        # Old-snapshot compat - empty dict if record_sess is absent (sess_idx None->keep, legacy behavior).
         self._graph.record_sess = d.get("record_sess", {})
         self._idx.dialogues = d["dialogues"]
         self._idx.dates = d["dates"]
@@ -823,7 +823,7 @@ class GroupChatMem(Memory):
         self._idx._bm25 = None
 
     # ====================================================================
-    # internal — q_clf
+    # internal - q_clf
     # ====================================================================
     def _retrieve_sessions(self, question: Question, idx: int, route: str = "SESSIONS",
                        current_session: "Session | None" = None) -> RetrievalResult:
@@ -853,7 +853,7 @@ class GroupChatMem(Memory):
                 current_session.partial_embedding,
             ))
 
-        # 2) timestamp filter (optional) — only when rag_time_filter ON + time_filter ON + timestamps present
+        # 2) timestamp filter (optional) - only when rag_time_filter ON + time_filter ON + timestamps present
         if self.session_time_filter and self.time_filter and timestamps:
             pool = [t for t in pool if _date_matches_any(t[1], timestamps)]
         if not pool:
@@ -864,8 +864,8 @@ class GroupChatMem(Memory):
         # 3) ranking (ad-hoc corpus)
         order = self._session_order_adhoc(question, pool, metrics)
 
-        # 4) top-k cut (when num_sessions > 0) — RAG path
-        # BUG FIX: variable swap — the session path cuts by num_sessions.
+        # 4) top-k cut (when num_sessions > 0) - RAG path
+        # The session (RAG) path is cut by num_sessions.
         if self.num_sessions > 0:
             order = order[: self.num_sessions]
 
@@ -938,7 +938,7 @@ class GroupChatMem(Memory):
                 if e is None:
                     t0 = time.perf_counter()
                     # L1+S4 fix: _session_order_adhoc's pool uses the partial-dialogue-only path.
-                    # Separated from commit()'s entire-cache write → prevents trial contamination.
+                    # Separated from commit()'s entire-cache write -> prevents trial contamination.
                     e = self._cached_partial_dialogue_embed(p[0])
                     metrics.latency_sec += time.perf_counter() - t0
                     metrics.num_embedding_calls += 1
@@ -954,7 +954,7 @@ class GroupChatMem(Memory):
         raise ValueError(f"Unknown rag_method: {method!r}")
 
     # ====================================================================
-    # internal — obtain question embedding (precomputed first, else live embed)
+    # internal - obtain question embedding (precomputed first, else live embed)
     # ====================================================================
     def _question_embedding(self, question: Question, metrics: "CallMetrics | None" = None):
         """Return the question's embedding vector. Prefer the precomputed map, fall back to embed_one if absent.
@@ -969,7 +969,7 @@ class GroupChatMem(Memory):
         return q_vec
 
     # ====================================================================
-    # internal — relational memory R retrieval (two-hop traversal)
+    # internal - relational memory R retrieval (two-hop traversal)
     # ====================================================================
     def _retrieve_records(self, question: Question, idx: int, route: str = "RECORDS",
                       current_session: "Session | None" = None) -> RetrievalResult:
@@ -979,7 +979,7 @@ class GroupChatMem(Memory):
         # R/S symmetry: R(C) at retrieve time = A (committed accumulation, sess_idx < idx) + B (current
         #   session's partial record). Exactly symmetric to RAG's "previous entire dialogue + current-session
         #   partial dialogue" pool. query_node candidate nodes, 2-hop traversal, and timestamp retrieval all
-        #   operate over C. Future-leakage blocking: A only sess<idx, B only the current session's partial →
+        #   operate over C. Future-leakage blocking: A only sess<idx, B only the current session's partial ->
         #   0 future-session records exposed.
         cur_partial = current_session.partial_records if current_session is not None else None
         kg = self._graph.combined_until(idx, cur_partial)
@@ -991,9 +991,9 @@ class GroupChatMem(Memory):
                 items=[], rendered="No relevant triple!", extra={"route": route}, metrics=metrics
             )
 
-        # 1) identify query_node (precomputed_query_nodes[idx] first → else 100-batch live over nodes)
+        # 1) identify query_node (precomputed_query_nodes[idx] first -> else 100-batch live over nodes)
         # _identify_query_nodes returns a (kg_nodes, raw_subjects, prompt_text) tuple. Precompute is looked up by question_idx=idx.
-        #   ablation uses kg_nodes only → raw_subjects ignored.
+        #   ablation uses kg_nodes only -> raw_subjects ignored.
         query_node_candidates, _, query_node_id_prompt = self._identify_query_nodes(
             question, nodes, metrics, question_idx=idx,
         )
@@ -1003,18 +1003,18 @@ class GroupChatMem(Memory):
         if any(p in f" {question.text.lower()} " for p in (" i ", " my ", " me ")):
             query_node_candidates.append(question.questioner)
         query_node_candidates = list({c for c in query_node_candidates if c})
-        # BUG FIX: .capitalize() lowercased everything after the second word of multi-word entities
+        # .capitalize() lowercased everything after the second word of multi-word entities
         # (e.g. "Paul the wine guy", "Ross Geller"), causing nodes matching to fail. Also, without
         # case-insensitive matching, "andrea" / "ANDREA" / "Andrea" were inconsistent.
-        # Fix: case-insensitive lookup (lower → original mapping).
+        # Fix: case-insensitive lookup (lower -> original mapping).
 
         # get_clean_entity is a pure helper in utils/common_utils.py (module-level import).
-        # BUG FIX: the old dict comprehension silently overwrote on collision of two nodes with the same
-        # clean form (depended on dict insertion order, hurting reproducibility). setdefault preserves first-seen.
+        # setdefault keeps the first-seen node on a clean-form collision, so the mapping is
+        # insertion-order independent and reproducible.
         _node_lookup: dict[str, str] = {}
         for n in nodes:
             _node_lookup.setdefault(get_clean_entity(n), n)
-        # fuzzy fallback removed by design. query_node→R node matching uses exact match (_node_lookup) only.
+        # fuzzy fallback removed by design. query_node->R node matching uses exact match (_node_lookup) only.
         # query_node candidates without an exact match are discarded (not included in query_node_matches).
         # The old fuzzy fallback (rapidfuzz score>=60) is removed. The subsequent timestamp retrieval
         # (below, `if not query_node_matches and ts_retrieval:`, controlled by the retrieve_by_timestamp toggle)
@@ -1024,7 +1024,7 @@ class GroupChatMem(Memory):
             for c in query_node_candidates
             if get_clean_entity(c) in _node_lookup
         ]
-        # Enforce num_query_nodes (K = number of query nodes) cut — top K after exact-match.
+        # Enforce num_query_nodes (K = number of query nodes) cut - top K after exact-match.
         #   The precompute cache (`query_node_{norm}_nq{K}.json`) already holds K, but (a) questioner append
         #   (first person) could make it K+1, and (b) there was a bug where the precompute-first early-return
         #   returned the entire cache and ignored K. Cutting by K here makes the query-node count exactly
@@ -1073,10 +1073,10 @@ class GroupChatMem(Memory):
                 if not seeds:
                     break
             if timestamps and self.time_filter:
-                # When time_filter is OFF, this whole timestamp-filter block is bypassed → 2-hop results as is.
+                # When time_filter is OFF, this whole timestamp-filter block is bypassed -> 2-hop results as is.
                 # Behavior is decided by the timestamp_fallback cfg flag.
-                # True (default): if filtered is empty, keep unfiltered → prevents degeneration (future-proof).
-                # False: if filtered is empty, empty list → for legacy/v1_2_2 reproduction.
+                # True (default): if filtered is empty, keep unfiltered -> prevents degeneration (future-proof).
+                # False: if filtered is empty, empty list -> for legacy/v1_2_2 reproduction.
                 # v1.3.1 guarantees absolute dates via _force_session_date, so False is fine too.
                 _ts_fallback = self.cfg.get("timestamp_fallback", True)
                 filtered = _filter_records_by_timestamp(retrieved, timestamps)
@@ -1088,9 +1088,9 @@ class GroupChatMem(Memory):
                     retrieved = []  # legacy behavior: empty when filtered is empty
 
         # 2.5) Future-leakage blocking is already guaranteed by combined_until(C=A+B):
-        #   A copies only sess<idx, B only the current session's partial (sess==idx) — no future (>idx) records in C.
-        #   So the old post-filter `sess_idx < idx` wrongly removed B (sess==idx) and is removed.
-        #   (The old filter was a safety net from when we traversed all of self._graph.)
+        #   A copies only sess<idx, B only the current session's partial (sess==idx) - no future (>idx) records in C.
+        #   No post-filter on sess_idx is needed: C excludes future (>idx) records and the
+        #   current session's partial (sess==idx) is kept.
 
         # retrieval recall: B = the whole set of retrieved raw evidence (before top-k/reranker).
         #   reranker/cos_sim only reorder while top-k (num_records) cuts, so we snapshot here
@@ -1103,11 +1103,11 @@ class GroupChatMem(Memory):
             order = self.reranker.rerank(question.text, cands)
             retrieved = [retrieved[i] for i in order]
 
-        # 4.5) cos_sim re-rank — right before render, sort DESCENDING by cosine similarity between the
-        #      question embedding and each record embedding (highest similarity first → top-first render).
+        # 4.5) cos_sim re-rank - right before render, sort DESCENDING by cosine similarity between the
+        #      question embedding and each record embedding (highest similarity first -> top-first render).
         # This whole block is skipped when self.cos_sim_rerank=False (default).
-        # BUG FIX: works even when _record_emb_map is empty, via partial_record_cache (file cache) or the
-        # live embed fallback → no silent skip in the cache-only case.
+        # works even when _record_emb_map is empty, via partial_record_cache (file cache) or the
+        # live embed fallback -> no silent skip in the cache-only case.
         if self.cos_sim_rerank and len(retrieved) > 1 and (
             self._record_emb_map or self._partial_record_cache or self._entire_record_cache
         ):
@@ -1117,8 +1117,8 @@ class GroupChatMem(Memory):
                 head, rel, tail = q["head"], q["relation"], q["tail"]
                 sd = q.get("start_date")
                 # Split the key by record_embedding_type:
-                # - "temporal" → f"{h} {r} {t} on {sd}" (non_temporal fallback if sd is absent)
-                # - "non_temporal" → f"{h} {r} {t}" only (sd ignored)
+                # - "temporal" -> f"{h} {r} {t} on {sd}" (non_temporal fallback if sd is absent)
+                # - "non_temporal" -> f"{h} {r} {t}" only (sd ignored)
                 if self.record_embedding_type == "temporal":
                     key = f"{head} {rel} {tail} on {sd}" if sd else f"{head} {rel} {tail}"
                 else:  # non_temporal
@@ -1128,7 +1128,7 @@ class GroupChatMem(Memory):
                     # non_temporal fallback on temporal match miss (in-memory map only).
                     emb = self._record_emb_map.get(f"{head} {rel} {tail}")
                 if emb is None:
-                    # in-memory map miss → cache lookup chain + live embed + cache update.
+                    # in-memory map miss -> cache lookup chain + live embed + cache update.
                     t0 = time.perf_counter()
                     emb = self._cached_record_embed(key)
                     metrics.latency_sec += time.perf_counter() - t0
@@ -1136,15 +1136,15 @@ class GroupChatMem(Memory):
                 sim = cos_sim(q_vec, emb)
                 scored.append((q, sim))
             # Descending by similarity. Records without an embedding were live-embedded above, so they
-            # always have a valid sim — no special last-placement needed.
+            # always have a valid sim - no special last-placement needed.
             scored.sort(key=lambda x: -x[1])
             retrieved = [q for q, _ in scored]
 
-        # 3') num_records top-k cut — moved after reranker + cos_sim rerank.
-        #   enhanced: 2-hop → (reranker) → cos_sim rerank → top-k(=100) cut → render.
-        #   In the old order, the cut preceded the rerank, so the first k in 2-hop order were kept
-        #   rather than the cos_sim top ones. With num_records=0 (budget mode) no cut is
-        #   done → fill up to context_size.
+        # 3') num_records top-k cut - moved after reranker + cos_sim rerank.
+        #   enhanced: 2-hop -> (reranker) -> cos_sim rerank -> top-k(=100) cut -> render.
+        #   The cut runs after reranking so the kept records are the cos_sim top-k, not the
+        #   raw 2-hop order. With num_records=0 (budget mode) no cut is
+        #   done -> fill up to context_size.
         if self.num_records > 0:
             retrieved = retrieved[: self.num_records]
 
@@ -1177,7 +1177,7 @@ class GroupChatMem(Memory):
         )
 
     # ====================================================================
-    # internal — enhanced retrieval (sessions top-k + records top-k simultaneously)
+    # internal - enhanced retrieval (sessions top-k + records top-k simultaneously)
     # ====================================================================
     def _retrieve_dual(self, question: Question, idx: int,
                             current_session: "Session | None" = None) -> RetrievalResult:
@@ -1195,7 +1195,7 @@ class GroupChatMem(Memory):
                 "records_rendered": rec.rendered,
                 "session_items": sess.items,
                 "record_items": rec.items,
-                # retrieval recall: dual = sessions + records simultaneously → store B/C separately per path.
+                # retrieval recall: dual = sessions + records simultaneously -> store B/C separately per path.
                 #   For recall measurement, session-path = dialogue-level, record-path = record-level.
                 "retrieval_b_sessions": sess.extra.get("retrieval_b", []),
                 "retrieval_c_sessions": sess.extra.get("retrieval_c", []),
@@ -1208,11 +1208,11 @@ class GroupChatMem(Memory):
         )
 
     # ====================================================================
-    # internal — traversal helpers (over-length guard + node resolution)
+    # internal - traversal helpers (over-length guard + node resolution)
     # ====================================================================
     def _cap_prompt(self, prompt: str) -> str:
         """Cap the input tokens of a traversal prompt so that input + output stays within
-        the serving max-model-len (the front — instruction + question + records — is kept
+        the serving max-model-len (the front - instruction + question + records - is kept
         first; the dialogue at the back is trimmed first). If context_size > 0, apply the
         smaller of the two limits."""
         cap = self._input_token_cap
@@ -1237,10 +1237,10 @@ class GroupChatMem(Memory):
     def _classify_next_lookup(text: str) -> "tuple[str, str]":
         """Classify the traversal-lookup output into 3 outcomes. Returns (kind, entity).
 
-        kind ∈ {"IDK", "STOP", "ENTITY"}:
-          - "IDK"    : "I don't know"-like → model declares it can't answer → caller confirms (E) and stops.
-          - "STOP"   : "UNKNOWN"-like → no more entity to find → stop the cycle (finish with enhanced full).
-          - "ENTITY" : otherwise → entity name (first line). Caller tries KG resolve.
+        kind in {"IDK", "STOP", "ENTITY"}:
+          - "IDK"    : "I don't know"-like -> model declares it can't answer -> caller confirms (E) and stops.
+          - "STOP"   : "UNKNOWN"-like -> no more entity to find -> stop the cycle (finish with enhanced full).
+          - "ENTITY" : otherwise -> entity name (first line). Caller tries KG resolve.
         Based on the first non-blank line, ignoring case/punctuation/quotes.
         """
         raw = (text or "").strip()
@@ -1248,7 +1248,7 @@ class GroupChatMem(Memory):
             return "STOP", ""
         first = raw.splitlines()[0].strip().strip('"').strip("'").strip()
         low = first.lower().strip().rstrip(".!?,").strip()
-        # "I don't know" / "i dont know" / "none of the above"-like → give up.
+        # "I don't know" / "i dont know" / "none of the above"-like -> give up.
         if low in ("i don't know", "i dont know", "idk", "none", "none of the above") or low.startswith("i don't know") or low.startswith("i dont know"):
             return "IDK", ""
         if low == "unknown" or low.startswith("unknown"):
@@ -1262,23 +1262,23 @@ class GroupChatMem(Memory):
     ) -> "tuple[str, RetrievalResult, CallMetrics]":
         """iterative traversal: the subgraph-exploration re-answer prompt = **initial records +
         records newly discovered by exploration, accumulated** (qa_dual.txt). Dialogue **keeps the initial
-        full_sessions as is** in every QA prompt (do NOT clear dialogue during traversal — initial dialogue is always
+        full_sessions as is** in every QA prompt (do NOT clear dialogue during traversal - initial dialogue is always
         included). lookup uses the traversal prompt (qa_traversal_lookup.txt: IDK=can't solve + no node
         to look up / UNKNOWN=there is a node to check but it cannot be pinpointed among the gathered record
         nodes). Each hop:
-          ① lookup → IDK=(E) terminate immediately, UNKNOWN=break→initial dual_full, node=resolve.
-          resolve failed/revisit/0 new records → break→initial dual_full.
-          if resolve+new records exist, ③ try answering over (initial triples + accumulated new records, initial
-          dialogue) → terminate unless (E); if (E), next iter. If still (E) after exhausting max_tries
+          (1) lookup -> IDK=(E) terminate immediately, UNKNOWN=break->initial dual_full, node=resolve.
+          resolve failed/revisit/0 new records -> break->initial dual_full.
+          if resolve+new records exist, (3) try answering over (initial triples + accumulated new records, initial
+          dialogue) -> terminate unless (E); if (E), next iter. If still (E) after exhausting max_tries
           (max hop limit), finish with initial enhanced_full.
         route="GROUPCHAT_MEM".
         """
         q_str = render_question(question, self.question_format)
         full_sessions = r1.extra.get("sessions_rendered") or "No relevant history!"
         full_records = r1.extra.get("records_rendered") or "No relevant triple!"
-        # Initial records (list of record dicts) — re-answer {triples} = these initial records + accumulated new records.
-        #   ★ r1.extra["record_items"] is a list of Item objects (_retrieve_records wraps as Item(meta=record)) → extract .meta (record dict).
-        #   (Item has no .get — calling q.get(...) directly crashes with "'Item' object has no attribute 'get'".)
+        # Initial records (list of record dicts) - re-answer {triples} = these initial records + accumulated new records.
+        #   r1.extra["record_items"] is a list of Item objects (_retrieve_records wraps as Item(meta=record)) -> extract .meta (record dict).
+        #   (Item has no .get - calling q.get(...) directly crashes with "'Item' object has no attribute 'get'".)
         initial_items = [it.meta for it in (r1.extra.get("record_items") or [])
                          if isinstance(getattr(it, "meta", None), dict)]
 
@@ -1291,7 +1291,7 @@ class GroupChatMem(Memory):
 
         visited: list[str] = []
         visited_set: set[str] = set()
-        # dedup key seed = initial triple keys → records already present initially don't count as "new records" (avoids duplicates).
+        # dedup key seed = initial triple keys -> records already present initially don't count as "new records" (avoids duplicates).
         acc_record_keys: set[tuple] = {
             (q.get("head"), q.get("relation"), q.get("tail"), q.get("start_date"))
             for q in initial_items
@@ -1335,9 +1335,9 @@ class GroupChatMem(Memory):
                 return "(E)", r2, metrics
 
             if kind == "STOP":
-                # UNKNOWN (further exploration needed but cannot be pinpointed) → cannot explore further →
+                # UNKNOWN (further exploration needed but cannot be pinpointed) -> cannot explore further ->
                 #   treat the 1st enhanced answer (answer()'s gen1 = r1.extra["qa_raw_text"], which is (E) by
-                #   the entry condition) as the final answer and terminate. (old: break → FINAL_ENHANCED re-ask)
+                #   the entry condition) as the final answer and terminate. (old: break -> FINAL_ENHANCED re-ask)
                 first_text = r1.extra.get("qa_raw_text", "(E)")
                 r2 = RetrievalResult(
                     items=list(r1.items), rendered="",
@@ -1360,7 +1360,7 @@ class GroupChatMem(Memory):
             if node is None or node in visited_set:
                 break
 
-            # ② among one-hop records, accumulate as new records only those "not in the previous QA prompt (initial triples + existing accumulation)".
+            # (2) among one-hop records, accumulate as new records only those "not in the previous QA prompt (initial triples + existing accumulation)".
             bq = kg.one_hop(node)
             added = 0
             for q in bq:
@@ -1372,7 +1372,7 @@ class GroupChatMem(Memory):
 
             visited.append(node); visited_set.add(node); iters += 1
 
-            # ③ try answering over (initial triples + accumulated new records) + initial dialogue.
+            # (3) try answering over (initial triples + accumulated new records) + initial dialogue.
             combined_items = initial_items + acc_records
             combined_records, _c2 = _render_records_in_order(
                 combined_items, self.record_format, self.context_size, base_p_records
@@ -1405,10 +1405,10 @@ class GroupChatMem(Memory):
                 return gen_ans.text, r2, metrics
 
         else:
-            # The for loop exhausted all 6 iters (max hop limit) without a break →
-            #   still no answer even with further exploration → terminate with "I don't know (E)" as the final
+            # The for loop exhausted all 6 iters (max hop limit) without a break ->
+            #   still no answer even with further exploration -> terminate with "I don't know (E)" as the final
             #   answer (no extra LLM call).
-            #   ⚠ for-else: else runs only when the loop ran to completion without any break.
+            #   for-else: else runs only when the loop ran to completion without any break.
             #      If it exited via break (resolve failed/revisit/added0), else is skipped and it falls through
             #      to FINAL_ENHANCED below.
             r2 = RetrievalResult(
@@ -1426,7 +1426,7 @@ class GroupChatMem(Memory):
             )
             return "(E)", r2, metrics
 
-        # Loop exited via break (resolve failed / revisit / added0) → finalize with one enhanced full call
+        # Loop exited via break (resolve failed / revisit / added0) -> finalize with one enhanced full call
         #   (FINAL_ENHANCED). (6-hop exhaustion is already terminated with (E) in the for-else above, so it
         #   never reaches here.)
         final_prompt = (
@@ -1461,7 +1461,7 @@ class GroupChatMem(Memory):
         """Extract query_node candidates (batch + precompute support).
 
         - If precomputed_query_nodes[question_idx] exists, skip the LLM (precompute first, same pattern as precomputed routing).
-        - Otherwise split nodes into query_node_batch_size (default 100) chunks and call _query_node_one_batch per batch →
+        - Otherwise split nodes into query_node_batch_size (default 100) chunks and call _query_node_one_batch per batch ->
           merge candidates (dedup, first-seen order). By design: 100-batch.
         Returns: (kg_nodes: list[str], raw_subjects: list[str], last_prompt_text: str)
         - kg_nodes: the final query_node after mapping the stage2 LLM output to KG nodes and applying the _allowed filter
@@ -1470,21 +1470,21 @@ class GroupChatMem(Memory):
           analysis). By design, both raw + kg_nodes are stored.
         - prompt_text: the full prompt of the last batch (empty string if no LLM call/precompute).
         """
-        # precompute first (per-llm query_node.json) — 0 LLM calls.
+        # precompute first (per-llm query_node.json) - 0 LLM calls.
         if question_idx is not None and question_idx in self.precomputed_query_nodes:
             return list(self.precomputed_query_nodes[question_idx]), [], ""
-        # Review #2 MEDIUM-E11: trivial return when nodes < k (sparse KG) — LLM skip.
+        # Review #2 MEDIUM-E11: trivial return when nodes < k (sparse KG) - LLM skip.
         if not nodes:
             return [], [], ""
         k = min(self.num_query_nodes, len(nodes))
-        # Removed the k<=1 (single node) early return — even with 1 node, it must go through query_node_one_batch
+        # Removed the k<=1 (single node) early return - even with 1 node, it must go through query_node_one_batch
         #   (subject identification) to be accurate. (The early return unconditionally returned nodes[0] regardless
         #   of subject = inaccurate.)
         bs = max(1, self.query_node_batch_size)
         merged: list[str] = []
         seen: set[str] = set()
         last_prompt = ""
-        # stage1 batch parallelization. Batches are independent (each sees only nodes[s:s+bs]) → concurrent LLM calls.
+        # stage1 batch parallelization. Batches are independent (each sees only nodes[s:s+bs]) -> concurrent LLM calls.
         #   Results are merged in index order, so it is bit-identical to sequential (same merged order, same last_prompt).
         #   metrics are received as independent CallMetrics per batch and summed in a single-threaded merge (avoids
         #   shared += race). query_node_batch_workers=1 is fully identical to the original sequential path.
@@ -1528,7 +1528,7 @@ class GroupChatMem(Memory):
         # query_node 2-pass stage2: feed stage1's merged (union of each batch's query_node_idf candidates) back into the
         #   query_node_idf_select prompt as options, and select the final k query_node only from the options (= a subset of
         #   current R nodes). If merged is empty, skip stage2 (return []).
-        #   query_node_check (R node existence verification) was removed — node matching (exact, no fuzzy) is done by
+        #   query_node_check (R node existence verification) was removed - node matching (exact, no fuzzy) is done by
         #   the caller _retrieve_records. Since the LLM may hallucinate entities outside the options, filter final once
         #   more against the merged set.
         if merged:
@@ -1571,7 +1571,7 @@ def _query_node_one_batch(llm, prompt_template: str, question_text: str, questio
                       metrics: "CallMetrics | None" = None) -> tuple[list[str], str]:
     """One query_node_idf LLM call with nodes_batch as options. Returns (candidates, prompt).
 
-    structured (QueryNodeList) first → free-form (ast.literal_eval) fallback on failure — **identical** to the parse
+    structured (QueryNodeList) first -> free-form (ast.literal_eval) fallback on failure - **identical** to the parse
     semantics of the original _identify_query_nodes (protects Qwen2.5 reproducibility). If metrics is None, skip accumulation.
     llm is an object with generate_structured/generate (returning GenerationRecord) (the memory's self.llm).
     """
@@ -1593,7 +1593,7 @@ def _query_node_one_batch(llm, prompt_template: str, question_text: str, questio
             return [str(x) for x in parsed.subjects], prompt
     except Exception:
         pass
-    # free-form fallback (legacy — protects Qwen2.5 reproducibility)
+    # free-form fallback (legacy - protects Qwen2.5 reproducibility)
     gen = llm.generate(prompt)
     if metrics is not None:
         metrics.latency_sec += gen.latency_sec
@@ -1701,7 +1701,7 @@ def _record_to_string(q: dict) -> str:
 
 
 def _dedup_record_items(records: "list[dict]") -> "list[dict]":
-    """record set for retrieval recall B/C — normalize (head,relation,tail,start_date) + dedup (order-agnostic set)."""
+    """record set for retrieval recall B/C - normalize (head,relation,tail,start_date) + dedup (order-agnostic set)."""
     seen: set = set()
     out: list = []
     for q in records or []:
@@ -1716,7 +1716,7 @@ def _dedup_record_items(records: "list[dict]") -> "list[dict]":
 
 
 def _dedup_dialogue_items(pairs: "list[tuple]") -> "list[dict]":
-    """dialogue set for retrieval recall B/C — dedup by session_idx. pairs=[(session_idx, date), ...]."""
+    """dialogue set for retrieval recall B/C - dedup by session_idx. pairs=[(session_idx, date), ...]."""
     seen: set = set()
     out: list = []
     for s_idx, date in pairs or []:
@@ -1757,7 +1757,7 @@ def _render_records_in_order(records: list[dict], record_format: str, context_si
             s = f"{{{q['head']}, {q['relation'].lower()}, {q['tail']}, {date}}}"
         st = count_tokens(s) + 2  # allowance for the ", " separator tokens
         # stop if base_prompt + accumulated so far + this record exceeds context_size (preserves top-first).
-        # context_size<=0 = token limit off → fill all without cutting (unlimited).
+        # context_size<=0 = token limit off -> fill all without cutting (unlimited).
         if context_size > 0 and cur + st > context_size:
             break
         items.append(s)

@@ -52,7 +52,7 @@ def load_project_env(start: Path | str | None = None, override: bool = False) ->
     try:
         from dotenv import load_dotenv
     except ImportError:
-        # python-dotenv not installed — parse manually instead.
+        # python-dotenv not installed - parse manually instead.
         _manual_load_env(env_path, override=override)
         return env_path
     load_dotenv(env_path, override=override)

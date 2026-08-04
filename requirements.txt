@@ -1,4 +1,4 @@
-# Core dependencies — required for the main method and all baselines.
+# Core dependencies - required for the main method and all baselines.
 # Derived from the actual imports in src/groupchat_qa/** and src/run/**.
 # Requires Python >= 3.10 (the code uses PEP 604 `X | Y` type unions).
 
