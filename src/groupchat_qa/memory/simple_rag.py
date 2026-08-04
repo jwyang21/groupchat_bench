@@ -48,7 +48,7 @@ class SimpleRAGMemory(Memory):
 
     Config keys (memory.*):
       retriever      : 'bm25' or 'embedding' (default 'embedding').
-      num_sessions   : number of sessions retrieved (default 250).
+      num_sessions   : number of sessions retrieved (default 40).
       context_size   : optional final-prompt token limit (0 = unlimited).
       no_history     : if True, behave as Direct QA (answer with no retrieved history).
       question_format: 'multi_structured' / 'multi_unstructured' / 'open_ended'.
@@ -62,7 +62,7 @@ class SimpleRAGMemory(Memory):
         self.retriever = str(cfg.get("retriever", "embedding")).lower()
         if self.retriever not in ("bm25", "embedding"):
             raise ValueError(f"retriever must be 'bm25' or 'embedding', got {self.retriever!r}")
-        self.num_sessions = int(cfg.get("num_sessions", 250))
+        self.num_sessions = int(cfg.get("num_sessions", 40))
         self.context_size = int(cfg.get("context_size", 0))
         self.context_size = 10 ** 9 if self.context_size <= 0 else self.context_size
         self.no_history = bool(cfg.get("no_history", False))

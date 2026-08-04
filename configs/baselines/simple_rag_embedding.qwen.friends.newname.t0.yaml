@@ -30,7 +30,7 @@ embedder:
 memory:
   name: simple_rag
   retriever: embedding          # 'embedding' (OpenAI Embedding) or 'bm25'
-  num_sessions: 250
+  num_sessions: 40
   context_size: 0
   question_format: multi_structured
 run:

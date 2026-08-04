@@ -43,8 +43,8 @@ groupchat_mem:
   memory:
     name: groupchat_mem
     # --- Dual-view retrieval (paper Table 5) ---
-    num_records: 40                   # k_r: relational records kept from R
-    num_sessions: 250                 # k_s: sessions retrieved from S (half BM25, half embedding)
+    num_records: 250                   # k_r: relational records kept from R
+    num_sessions: 40                 # k_s: sessions retrieved from S (half BM25, half embedding)
     num_query_nodes: 3                # n : top-n query-relevant nodes identified in R
     hop: 2                            # two-hop neighborhood around each query node
     max_hop: 6                        # maximum traversal hop limit
@@ -62,8 +62,8 @@ groupchat_mem:
     delimiter: "========================================"
 
   grid_combos:
-    - memory.num_records: 40
-      memory.num_sessions: 250
+    - memory.num_records: 250
+      memory.num_sessions: 40
       memory.num_query_nodes: 3
 
   qa:

@@ -1,5 +1,5 @@
 <!-- Last update: 2026-08-03 -->
-# GroupChat-Bench
+# GroupChat-Mem
 
 **A dual-view memory for long-term understanding of realistic group chats.**
 
@@ -10,7 +10,6 @@ Group Chats."* GroupChat-Mem combines a structured **relational memory** with a
 multi-party group-chat histories.
 
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 
 
 * * *
@@ -27,7 +26,7 @@ when each question is posed.
 
 **GroupChat-Mem** is a dual-view memory built online from the dialogue only:
 
-- **Relational memory $\mathcal{R}$.** At each turn, an LLM performs **Open Information Extraction
+- **Relational memory R.** At each turn, an LLM performs **Open Information Extraction
   (OpenIE)** over the (partial) session and produces **`[subject, relation, object]`**
   records (open-schema — no predefined entity types or relation labels). Subjects and
   objects become nodes and relations become edges; each record carries its source
@@ -35,17 +34,17 @@ when each question is posed.
   forming a graph-structured relational memory. Re-extraction uses the *complete* partial
   session and **replaces** the previous extraction, so earlier records are revised as later
   utterances resolve references.
-- **Raw session repository $\mathcal{S}$.** Each original session is stored verbatim, preserving exact
+- **Raw session repository S.** Each original session is stored verbatim, preserving exact
   wording, local discourse context, and conversational nuances that a compressed
   representation may omit.
 
 Given a query, GroupChat-Mem retrieves evidence from **both** views in parallel and, if the
 initial answer is insufficient, performs a fine-grained traversal over R:
 
-1. **From $\mathcal{R}$** — the LLM identifies the top-**n** query-relevant nodes; a **two-hop**
+1. **From R** — the LLM identifies the top-**n** query-relevant nodes; a **two-hop**
    neighborhood is built around each; the records are linearized, ranked by cosine
    similarity to the query (OpenAI embeddings), and the top-**k_r** records are kept.
-2. **From $\mathcal{S}$** — each session is a retrieval unit; **k_s** sessions are retrieved,
+2. **From S** — each session is a retrieval unit; **k_s** sessions are retrieved,
    **half by BM25** (lexical) and **half by embedding cosine similarity** (semantic).
 3. **Response** — the LLM generates an initial answer and judges its sufficiency. If
    sufficient, it is returned. Otherwise GroupChat-Mem traverses R: it picks the most
@@ -106,7 +105,6 @@ PYTHONPATH=src python src/run/run_baseline.py \
 .
 ├── README.md
 ├── requirements.txt
-├── LICENSE
 ├── .gitignore
 ├── configs/
 │   ├── groupchat_mem/    # the proposed method
@@ -138,8 +136,8 @@ The raw GroupChat-Bench data is available in this [link](https://drive.google.co
 
 | Hyperparameter | Value | Meaning |
 |---|---|---|
-| `num_records` (k_r) | 40 | records kept from the relational memory R |
-| `num_sessions` (k_s) | 250 | sessions retrieved from the raw session repository S |
+| `num_records` (k_r) | 250 | records kept from the relational memory R |
+| `num_sessions` (k_s) | 40 | sessions retrieved from the raw session repository S |
 | `num_query_nodes` (n) | 3 | top-n query-relevant nodes identified in R |
 | `hop` | 2 | two-hop neighborhood built around each query node |
 | `max_hop` | 6 | maximum traversal hop limit |
@@ -176,5 +174,3 @@ column is in **bold**. Each cell shows accuracy (%) as Qwen3.5 / Gemma4 / GPT-OS
 | Mem0 | 71.2 / 71.5 / 62.3 | 73.9 / 71.4 / 64.9 | 68.8 / 69.9 / 66.0 |
 | A-MEM | 65.2 / 69.2 / 58.0 | 69.6 / 70.2 / 61.8 | 68.1 / 69.3 / 62.7 |
 | **GroupChat-Mem** | **77.8 / 77.6 / 64.8** | 77.5 / **78.9 / 70.3** | **78.7** / 77.1 / **69.0** |
-
-* * *

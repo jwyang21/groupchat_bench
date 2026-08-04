@@ -98,10 +98,10 @@ class OracleMemory(Memory):
         self.delimiter = cfg.get("delimiter", "=" * 40)
         # top-k truncation — a fair ceiling using the same budget as the memory methods.
         #   Uses only the top-k of the already-sorted evidence (records=cosine, dials=alternating).
-        #   num_records (records, default 40), num_sessions (dialogue, default 250).
-        #   0/negative = truncation off (all) — but the main policy defaults to 40/350.
-        self.k_records = int(cfg.get("num_records", 40) or 0)
-        self.k_sessions = int(cfg.get("num_sessions", 250) or 0)
+        #   num_records (records, default 250), num_sessions (dialogue, default 40).
+        #   0/negative = truncation off (all) — but the main policy defaults to records=250, sessions=40.
+        self.k_records = int(cfg.get("num_records", 250) or 0)
+        self.k_sessions = int(cfg.get("num_sessions", 40) or 0)
         # dialogue ordering choice — build_oracle policy defaults to alternating.
         self.dialogue_rank = str(cfg.get("oracle_dialogue_rank", "alternating")).lower()
 

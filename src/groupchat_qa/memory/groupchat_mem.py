@@ -284,8 +284,8 @@ class GroupChatMem(Memory):
     the answer is supported or at the maximum hop limit ("I don't know.").
 
     Config keys (memory.*):
-      num_records        : k_r — number of relational records kept from R (paper default 40).
-      num_sessions       : k_s — number of sessions retrieved from S (paper default 250).
+      num_records        : k_r — number of relational records kept from R (paper default 250).
+      num_sessions       : k_s — number of sessions retrieved from S (paper default 40).
       num_query_nodes    : n  — top-n query-relevant nodes identified in R (paper default 3).
       hop                : two-hop neighborhood expansion around each query node (default 2).
       max_hop            : maximum traversal hop limit (default 6).
@@ -312,10 +312,10 @@ class GroupChatMem(Memory):
         self.fallback = bool(cfg.get("fallback", True))
 
         # Top-k for each memory view (paper: k_r records from R, k_s sessions from S).
-        #   num_records  (k_r): number of relational records kept from R (paper default 40).
-        #   num_sessions (k_s): number of sessions retrieved from S      (paper default 250).
-        self.num_records = int(cfg.get("num_records", 40))
-        self.num_sessions = int(cfg.get("num_sessions", 250))
+        #   num_records  (k_r): number of relational records kept from R (paper default 250).
+        #   num_sessions (k_s): number of sessions retrieved from S      (paper default 40).
+        self.num_records = int(cfg.get("num_records", 250))
+        self.num_sessions = int(cfg.get("num_sessions", 40))
         if self.num_records <= 0 or self.num_sessions <= 0:
             raise ValueError(
                 f"num_records and num_sessions must be positive, got "

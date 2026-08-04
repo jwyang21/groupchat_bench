@@ -37,8 +37,8 @@ memory:
   question_format: multi_structured
   context_size: 0
   fallback: true
-  num_records: 40
-  num_sessions: 250
+  num_records: 250
+  num_sessions: 40
   record_format: record
   normalization: raw
   delimiter: ========================================
