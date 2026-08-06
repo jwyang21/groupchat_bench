@@ -12,12 +12,11 @@ pyyaml
 
 # Numerics & graphs
 numpy
-networkx            # HippoRAG2 knowledge graph + Personalized PageRank
+networkx            # HippoRAG2 relational fact store + Personalized PageRank
 
-# Retrieval (lexical BM25 + fuzzy matching)
+# Retrieval (lexical BM25)
 rank-bm25
 nltk                # word tokenization for BM25
-rapidfuzz           # fuzzy answer/option matching
 
 # Structured LLM output schemas
 pydantic
@@ -26,7 +25,6 @@ pydantic
 # Optional dependencies (imported lazily only when the corresponding feature
 # or provider is selected in the config). Uncomment as needed.
 # ---------------------------------------------------------------------------
-# langchain-anthropic       # provider: anthropic
 # langchain-google-genai    # provider: google
 # sentence-transformers     # embedder backend: sentence_transformer
 # torch                     # cross-encoder reranker (reranker != none)

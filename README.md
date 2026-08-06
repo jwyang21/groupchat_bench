@@ -149,7 +149,7 @@ The raw GroupChat-Bench data is available in this [link](https://drive.google.co
 | **Direct QA (No History)** | Answers from parametric knowledge only (`simple_rag`, `no_history: true`). |
 | **Simple RAG (BM25)** | Sparse lexical session retrieval (`simple_rag`, `retriever: bm25`). |
 | **Simple RAG (OpenAI Embedding)** | Dense semantic session retrieval (`simple_rag`, `retriever: embedding`). |
-| **HippoRAG 2** | OpenIE knowledge graph + Personalized PageRank retrieval. |
+| **HippoRAG 2** | OpenIE-based relational fact store + Personalized PageRank retrieval. |
 | **Mem0** | Fact extraction with add/update/delete consolidation, dense retrieval. |
 | **A-MEM** | Interlinked memory notes with dynamic linking and evolution. |
 | **Oracle** | Upper bound with perfect retrieval and routing. |

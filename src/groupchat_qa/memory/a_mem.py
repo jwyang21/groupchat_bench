@@ -46,7 +46,6 @@ import re
 import threading
 import time
 import uuid
-from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -247,18 +246,11 @@ class AMemMemory(Memory):
         # QA template token count is constant -> compute once (avoid re-tokenizing per retrieve).
         self._p_qa_tokens = count_tokens(self._p_qa)
 
-        # Load session_{idx-1}.snapshot at retrieve time and search only over notes (enhanced embedding)
-        #   up to that point -> use enhanced embeddings without future leakage.
-        #   None (unset) keeps the current behavior (self._notes, final commit).
+        # session_snapshot_dir - only used to locate the query_keywords.json cache below. retrieve
+        #   reads the final store (self._notes) with a session_idx filter, so per-session snapshots are
+        #   not needed for QA. None (unset) keeps the default (self._notes, final commit).
         _snap_dir = cfg.get("session_snapshot_dir")
         self._session_snapshot_dir = Path(_snap_dir) if _snap_dir else None
-        # Read-only LRU cache of each session snapshot's (order, notes).
-        #   Multi-threaded QA (answer_max_workers>1) safe - _get_session_notes fills under lock and
-        #   retrieve uses the returned dict read-only (self._notes not mutated -> no cross-thread race).
-        #   The QA loop is monotonically increasing, so evict from smaller idx. 64 = 16 workers x slack.
-        self._snap_cache: "OrderedDict[int, tuple[list[str], dict[str, MemoryNote]]]" = OrderedDict()
-        self._snap_lock = threading.Lock()
-        self._snap_cache_max = int(cfg.get("session_snapshot_cache_max", 64))
 
         # Official generate_query_llm (test_advanced.py L67-87) - convert the question into search
         #   keywords and embed. Use a precompute cache instead of a per-QA-runtime LLM call: the
@@ -361,41 +353,6 @@ class AMemMemory(Memory):
             self._order.append(note.id)
         return metrics
 
-    # per-session snapshot load - enhanced embedding without future leakage
-    def _get_session_notes(self, snap_idx: int) -> "tuple[list[str], dict[str, MemoryNote]]":
-        """[DEAD] retrieve no longer uses per-session snapshots
-        (self._notes + orig rendering + session_idx filter achieve zero leakage). This method and
-        `_snap_cache` have no callers (kept as a marker rather than deleted). _read_snapshot is still
-        used by restore.
-
-        Returns the (order, notes) of session_{snap_idx}.snapshot read-only.
-
-        Notes committed+evolved up to that point (sessions 0~snap_idx), using enhanced embeddings -
-        no future evolution reflected, so no future leakage. **Multi-threaded QA (answer_max_workers>1)
-        safe**:
-          - Does not touch self._notes/_order and returns local (order, notes) only -> no cross-thread swap race.
-          - Only cache filling is serialized under lock. retrieve uses the returned dict read-only.
-          - LRU (_snap_cache_max) bounds memory (QA loop is monotone, so FIFO-evict from smaller idx).
-        snap_idx<0 (first session) or missing file (commit incomplete) or corruption -> ([], {}) = no history.
-        """
-        if snap_idx < 0:
-            return [], {}
-        with self._snap_lock:
-            cached = self._snap_cache.get(snap_idx)
-            if cached is None:
-                snap_path = self._session_snapshot_dir / f"session_{snap_idx:04d}.snapshot.pkl"
-                if snap_path.exists():
-                    try:
-                        cached = self._read_snapshot(str(snap_path))
-                    except Exception:
-                        cached = ([], {})  # corrupted snapshot -> graceful no-history
-                else:
-                    cached = ([], {})
-                self._snap_cache[snap_idx] = cached
-                while len(self._snap_cache) > self._snap_cache_max:
-                    self._snap_cache.popitem(last=False)  # FIFO evict (oldest = smallest idx)
-            return cached
-
     # retrieve - dense top-k over notes from sessions below idx
     def _generate_query_keywords(self, question_text: str) -> str:
         """Official generate_query_llm (test_advanced.py L67-87) - question -> search keywords.
@@ -470,10 +427,9 @@ class AMemMemory(Memory):
 
         # retrieve candidates = final store (self._notes) + session_idx<current filter.
         #   Ranking uses note.embedding (fixed at creation = same as official) -> zero future leakage;
-        #   rendering uses orig_context/orig_tags (immutable) -> zero future leakage. This removed the old
-        #   dependency on per-session snapshots (_get_session_notes), eliminating the sparse-snapshot
-        #   empty-late-session bug. retrieve accesses self._notes read-only and evolution (writes) finish
-        #   in the commit stage, so multi-threaded QA is safe.
+        #   rendering uses orig_context/orig_tags (immutable) -> zero future leakage. retrieve accesses
+        #   self._notes read-only and evolution (writes) finish in the commit stage, so multi-threaded
+        #   QA is safe.
         #   [render-field leakage-free rationale] context/tags render from orig (immutable). keywords/links
         #   are safe because evolution (_apply_neighbor_updates=context/tags only, strengthen=the new
         #   note's own tags/links only) never touches past notes, so they stay fixed at creation time.
@@ -645,8 +601,7 @@ class AMemMemory(Memory):
         save_pickle(payload, path)
 
     def _read_snapshot(self, path: str) -> "tuple[list[str], dict[str, MemoryNote]]":
-        """Read the snapshot pickle and return (order, notes) (does not touch self).
-        Shared by restore (which swaps self) and _get_session_notes (read-only cache)."""
+        """Read the snapshot pickle and return (order, notes) (does not touch self). Used by restore."""
         d = load_pickle(path)
         order = list(d.get("order", []))
         notes: dict[str, MemoryNote] = {}

@@ -51,7 +51,7 @@ class LLM(ABC):
         # that seeds python/numpy/torch RNG, this seeds the server sampling RNG.
         # None means seed is not passed (default behavior). Whether the seed is actually
         # attached to the request is each client's responsibility
-        # (vLLM/OpenAI support it, Anthropic/Gemini ignore it).
+        # (vLLM/OpenAI support it, other providers may ignore it).
         self.seed = seed
         self.extra_kwargs = kwargs
         self._chat = self._make_chat_model()

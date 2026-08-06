@@ -1,4 +1,4 @@
-"""HippoRAG 2 memory - OpenIE knowledge graph + Personalized PageRank retrieval.
+"""HippoRAG 2 memory - OpenIE-based relational fact store + Personalized PageRank retrieval.
 
 Paper: "From RAG to Memory: Non-Parametric Continual Learning for Large Language Models"
        (arXiv 2502.14802, HippoRAG 2)
@@ -119,7 +119,7 @@ class FactFilterResult(BaseModel):
 # Graph store - phrase/passage nodes + 3 edge types
 @dataclass
 class HippoGraphStore:
-    """HippoRAG 2 in-memory knowledge graph + auxiliary indices.
+    """HippoRAG 2 in-memory relational fact store + auxiliary indices.
 
     Merges the official repo's EmbeddingStore (chunk/entity/fact) + igraph into one:
     a networkx undirected graph plus phrase/passage embedding dicts.
@@ -244,7 +244,7 @@ def _min_max_normalize(x: np.ndarray) -> np.ndarray:
 
 # HippoRAG2Memory
 class HippoRAG2Memory(Memory):
-    """HippoRAG 2 - OpenIE KG + recognition-memory filter + PPR retrieval.
+    """HippoRAG 2 - OpenIE fact store + recognition-memory filter + PPR retrieval.
 
     config dict keys (all optional - defaults are the official repo BaseConfig values):
       synonymy_sim_threshold : float - synonym edge sim threshold (default 0.8)

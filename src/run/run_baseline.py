@@ -47,7 +47,7 @@ from groupchat_qa.embedder import CachedEmbedder, make_embedder
 from groupchat_qa.memory import make_memory
 from groupchat_qa.pipeline.data_loader import load_converted_dataset, load_query_nodes_for, load_v1_2_1_trial
 from groupchat_qa.utils import process_answer, save_pickle, load_pickle, seed_everything, load_project_env
-from groupchat_qa.utils.answer_match import match_option
+from groupchat_qa.utils.squad_score import match_option_squad
 
 # Auto-discover .env - traverse upward from this .py file and load the first .env (caller-relative).
 load_project_env(start=__file__, override=True)
@@ -283,7 +283,7 @@ def _commit_all_sessions(
       (RoundRobinLLM). memory.extract does not touch the accumulated store, so it is thread-safe
       (self.llm/embedder are lock-protected).
     Phase 2 (build): feed the extraction results to commit_prepared in *ascending session idx,
-      sequentially*, accumulating KG/note/memory. Even baselines with accumulation dependencies
+      sequentially*, accumulating fact store/note/memory. Even baselines with accumulation dependencies
       (link/evolution/update-decision) preserve ordering, so there is no temporal leakage.
 
     If commit_extract_workers <= 1, phase 1 is also sequential (identical commit order to before).
@@ -526,7 +526,7 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                 logging.warning(f"[{llm_name}] snapshot restore failed ({e}) -> proceeding with live commit")
                 restored = False
 
-    # If no_history, skip commit (KG build) entirely - answer does not use the KG/retrieval
+    # If no_history, skip commit (fact store build) entirely - answer does not use the fact store/retrieval
     #   (it uses only the no-history prompt), so the build result is discarded (wasteful). Treated the
     #   same as restored (snapshot reuse). Baselines (a_mem/mem0/hippo) have no no_history attribute ->
     #   getattr default False -> no effect (existing behavior preserved).
@@ -603,12 +603,19 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
         commit_extract_workers = answer_max_workers
     else:
         commit_extract_workers = max(1, int(_cew))
-    # (3) official-generative QA scoring mode: with question_format=multi_unstructured, take a
-    #   free-form answer, then normalize -> exact option match -> map to the most similar option via
-    #   rapidfuzz token_set_ratio (answer_match). (1)/(2) mcq mode (default) uses process_answer
-    #   (letter extraction) as before.
-    qa_eval_mode = str(run_cfg.get("qa_eval_mode", "mcq")).lower()
-    fuzzy_floor = float(run_cfg.get("fuzzy_floor", 0.0))
+    # QA scoring mode is tied to question_format so it can never be mismatched:
+    #   - multi_unstructured / open_ended: the model sees no (A)-(E) labels, so a free-form answer
+    #     is the only sensible output. These formats therefore use generative scoring - the model's
+    #     free-form answer is mapped onto one of the options via match_option_squad (SQuAD official
+    #     normalize -> token-overlap F1, argmax option), and the resulting option letter is compared
+    #     to the true_answer letter. Scoring is driven purely by question_format (no qa_eval_mode knob).
+    #   - multi_structured: the model is shown explicit (A)-(E) labels, so scoring uses
+    #     process_answer letter extraction (extract the (A)-(E) label, compare to true_answer letter).
+    _q_fmt = str(mem_cfg.get("question_format", "multi_structured")).lower().replace("-", "_")
+    if _q_fmt in ("multi_unstructured", "open_ended"):
+        qa_eval_mode = "generative"
+    else:
+        qa_eval_mode = "mcq"
 
     # Prepare per-session incremental save + resume after interruption
     #   If result_json_path is set, this function owns that JSON file (load -> resume -> incremental
@@ -760,12 +767,16 @@ def run_one_llm(llm, llm_name: str, embedder, sessions, questions, mem_cfg: dict
                 memory.llm = _answer_llm
                 text, retrieval, metrics = memory.answer(q, current_session_idx=s.idx, current_session=s)
                 if qa_eval_mode == "generative":
-                    # Free-form answer -> option mapping. Also store per-option similarity scores (for post-hoc review).
-                    _mm = match_option(text, list(q.options), fuzzy_floor=fuzzy_floor)
+                    # Map the free-form answer onto an option with SQuAD official F1, recording the
+                    #   per-option F1 / exact-match scores for post-hoc review. The chosen option's
+                    #   letter is then compared to the true_answer letter (same binary is_correct as
+                    #   the (A)-(E) path below). matched_idx=-1 means no option shared any token with
+                    #   the answer -> counts as wrong (empty label).
+                    _mm = match_option_squad(text, list(q.options))
                     processed = f"({chr(65 + _mm['matched_idx'])})" if _mm["matched_idx"] >= 0 else ""
-                    rec["match_scores"] = _mm["scores"]        # [{option, option_norm, score}]
-                    rec["match_type"] = _mm["match_type"]      # exact / fuzzy / floor_fallback
-                    rec["model_answer_norm"] = _mm["gen_norm"]
+                    rec["squad_f1_scores"] = _mm["f1_scores"]  # per-option SQuAD F1
+                    rec["squad_em_flags"] = _mm["em_flags"]    # per-option exact-match flags
+                    rec["squad_matched_idx"] = _mm["matched_idx"]
                 else:
                     processed = process_answer(text, list(q.options))
                 is_correct = processed == q.true_answer if q.true_answer else None
@@ -1096,9 +1107,9 @@ def run(
         _use_resume = (_p is not None) and (not commit_only) and (_rr is None)
         _save_every = int(run_cfg.get("result_save_every", 1)) if _use_resume else 0
         # no_history = parametric answer with no retrieval/history (uses only question + no-history
-        #   prompt; no KG/retrieval at all). So the per-llm record/route cache is unnecessary ->
+        #   prompt; no fact store/retrieval at all). So the per-llm record/route cache is unnecessary ->
         #   load only the base dataset (sessions+questions) so models with incomplete records (e.g.,
-        #   gemma t1/t2) also run immediately. commit (KG build) is skipped in run_one_llm (_skip_commit below).
+        #   gemma t1/t2) also run immediately. commit (fact store build) is skipped in run_one_llm (_skip_commit below).
         _no_history = bool(mem_cfg_base.get("no_history"))
         try:
             if per_llm_mode and not _no_history:

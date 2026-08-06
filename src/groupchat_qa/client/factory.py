@@ -12,7 +12,6 @@ def make_llm(provider: str, model_name: str, **kwargs: Any) -> LLM:
     provider:
       - "vllm"      : open-source LLM (vLLM serve endpoint).
       - "openai"    : OpenAI API
-      - "anthropic" : Anthropic API
       - "google"    : Google Gemini API
 
     Example:
@@ -26,10 +25,7 @@ def make_llm(provider: str, model_name: str, **kwargs: Any) -> LLM:
     if provider == "openai":
         from .openai_client import OpenAIClient
         return OpenAIClient(model_name=model_name, **kwargs)
-    if provider == "anthropic":
-        from .anthropic_client import AnthropicClient
-        return AnthropicClient(model_name=model_name, **kwargs)
     if provider == "google":
         from .google_client import GoogleClient
         return GoogleClient(model_name=model_name, **kwargs)
-    raise ValueError(f"Unknown provider: {provider!r}. Expected one of: vllm/openai/anthropic/google.")
+    raise ValueError(f"Unknown provider: {provider!r}. Expected one of: vllm/openai/google.")

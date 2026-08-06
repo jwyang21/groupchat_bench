@@ -13,7 +13,7 @@ HippoRAG2's sequential per-session OpenIE takes ~28h):
     in a ThreadPool (spread across the endpoint pool), then passes results to
     commit_prepared in session order.
   - `commit_prepared(session, extract_result) -> CallMetrics` - takes the extract
-    result and does the accumulated build (KG/note/memory). Any accumulation
+    result and does the accumulated build (fact store/note/memory). Any accumulation
     dependency (link/evolution/update-decision) must be done here sequentially so
     there is no temporal leakage.
   The Memory ABC default is `extract`=None and `commit_prepared`=plain

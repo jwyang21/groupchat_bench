@@ -212,7 +212,6 @@ def _compose_default_out_dir(method_cfg: dict, method_name: str) -> Path:
         str(data_cfg.get("ie_type", "openie")),
     ]
 
-    # return result directory
     return Path(f"./result/ablation/{method_name}") / ".".join(parts)
 
 
@@ -588,7 +587,7 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                 _cache_budget = _cache_budget_of(cfg_run)
                 # no_history combo -> the per-llm record/route cache is unnecessary (answer uses only
                 #   the no-history prompt). Load the base bundle (per_llm_name=None) so models with
-                #   incomplete records also run. commit (KG build) is auto-skipped via run_one_llm's
+                #   incomplete records also run. commit (fact store build) is auto-skipped via run_one_llm's
                 #   _skip_commit (kept in sync).
                 _no_hist = bool((cfg_run.get("memory") or {}).get("no_history"))
                 _bundle_per_llm = None if _no_hist else (llm_name if per_llm_mode else None)
@@ -645,11 +644,9 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     mem_cfg["precomputed_query_nodes"] = {int(k): v for k, v in _query_nodes.items()}
                 # Inject record embeddings (for the memory's cos_sim re-rank).
                 # Prefer partial (experiments use the partial memory), fall back to entire.
-                # A prior `_record_emb = None` (temporarily disabled due to an underscore-key mismatch)
-                # silently no-op'd the cos_sim_rerank=True grid axis -> ON/OFF gave identical results.
-                # EmbeddingCache keys are unified as `f"{h} {r} {t} on {sd}"` (temporal) +
-                # `f"{h} {r} {t}"` (non_temporal), and the memory also uses the same key -> re-enabled.
-                # On in-memory map miss, the file cache + live embed fallback protects.
+                # EmbeddingCache keys are `f"{h} {r} {t} on {sd}"` (temporal) + `f"{h} {r} {t}"`
+                # (non_temporal); the memory uses the same keys. On in-memory map miss, the file cache
+                # + live embed fallback protects.
                 _record_emb = bundle.get("partial_record_emb") or bundle.get("entire_record_emb")
                 if _record_emb:
                     mem_cfg["record_embeddings"] = _record_emb
@@ -675,11 +672,8 @@ def run_ablation(method_cfg: dict[str, Any], method_name: str, llm_names: list[s
                     save_every_sessions=(0 if rerun_missing else _abl_save_every),
                     resume=(not rerun_missing),
                 )
-                # Known issue, fix deferred: rerun_missing saves only at the end (save_every=0), so a
-                #   glacial theoffice job freezes n_scored until completion, and a kill loses reprocessed
-                #   work. Enabling incremental save (result_json_path+save_every+resume=True) is the fix,
-                #   but apply it only after unit-testing run_one_llm's resume+rerun_sessions behavior
-                #   (core save path - no unverified changes). TODO.
+                # rerun_missing mode saves once at the end (save_every=0); the caller-side patch below
+                #   merges the reprocessed sessions into the existing json.
                 wall = time.perf_counter() - t0
 
                 # rerun_missing mode: without changing the existing result json's structure/format,

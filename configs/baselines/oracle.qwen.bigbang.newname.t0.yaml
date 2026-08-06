@@ -55,7 +55,6 @@ run:
   log_prompts: true
   log_prompts_dir: log/oracle/prompts/bigbang.newname.t0.qwen3.5-35b-a3b-on
   answer_max_workers: 16
-  qa_eval_mode: mcq
   result_save_every: 300
 qa:
   answer_budget: 10000

@@ -105,7 +105,7 @@ class QueryNodeList(BaseModel):
     subjects: list[str] = Field(description="query-relevant node name candidates")
 
 
-# Helpers - KG / dialogue index
+# Helpers - relational fact store / dialogue index
 @dataclass
 class RelationalGraph:
     """Graph-structured relational memory R. Nested dict head -> relation -> timestamp ->
@@ -153,7 +153,7 @@ class RelationalGraph:
     def nodes_until(self, current_session_idx: "int | None") -> list[str]:
         """Return only head/tail of records that appeared in sessions below current_session_idx (future-leakage guard).
 
-        - current_session_idx is None -> the full nodes() (snapshot path - already a point-in-time-correct KG, no future record).
+        - current_session_idx is None -> the full nodes() (snapshot path - already a point-in-time-correct fact store, no future record).
         - Entities of records without a recorded record_sess (sess_idx None) are kept (live commit always records,
           so this only happens on the snapshot path). The comparison `sess is None or sess < idx` matches the
           record-filter semantics of `_filter_records_by_timestamp`, ensuring temporal alignment between query_node options
@@ -768,7 +768,11 @@ class GroupChatMem(Memory):
         r1.extra["qa_retrieval_rendered"] = r1.rendered
 
         # If the initial answer is sufficient (not "I don't know"), return it directly.
-        if not self.fallback or process_answer(gen1.text) != "(E)":
+        #   Pass question.options so abstention is detected format-independently: under
+        #   multi_unstructured / open_ended the model answers in prose ("I don't know") and never
+        #   emits an "(E)" label, so process_answer needs the option texts to map that prose to the
+        #   "I don't know / none of the above" option (its step-7b option-text matching).
+        if not self.fallback or process_answer(gen1.text, list(question.options)) != "(E)":
             return gen1.text, r1, metrics
 
         # Otherwise, run the fine-grained traversal over the relational memory.
@@ -958,18 +962,18 @@ class GroupChatMem(Memory):
         #   operate over C. Future-leakage blocking: A only sess<idx, B only the current session's partial ->
         #   0 future-session records exposed.
         cur_partial = current_session.partial_records if current_session is not None else None
-        kg = self._graph.combined_until(idx, cur_partial)
+        records = self._graph.combined_until(idx, cur_partial)
 
-        # query_node options = nodes of C (A+B). All nodes of the combined KG instead of nodes_until (already time-accurate).
-        nodes = kg.nodes()
+        # query_node options = nodes of C (A+B). All nodes of the combined fact store instead of nodes_until (already time-accurate).
+        nodes = records.nodes()
         if not nodes:
             return RetrievalResult(
                 items=[], rendered="No relevant triple!", extra={"route": route}, metrics=metrics
             )
 
         # 1) identify query_node (precomputed_query_nodes[idx] first -> else 100-batch live over nodes)
-        # _identify_query_nodes returns a (kg_nodes, raw_subjects, prompt_text) tuple. Precompute is looked up by question_idx=idx.
-        #   ablation uses kg_nodes only -> raw_subjects ignored.
+        # _identify_query_nodes returns a (query_nodes, raw_subjects, prompt_text) tuple. Precompute is looked up by question_idx=idx.
+        #   ablation uses query_nodes only -> raw_subjects ignored.
         query_node_candidates, _, query_node_id_prompt = self._identify_query_nodes(
             question, nodes, metrics, question_idx=idx,
         )
@@ -990,11 +994,10 @@ class GroupChatMem(Memory):
         _node_lookup: dict[str, str] = {}
         for n in nodes:
             _node_lookup.setdefault(get_clean_entity(n), n)
-        # fuzzy fallback removed by design. query_node->R node matching uses exact match (_node_lookup) only.
-        # query_node candidates without an exact match are discarded (not included in query_node_matches).
-        # The old fuzzy fallback (rapidfuzz score>=60) is removed. The subsequent timestamp retrieval
-        # (below, `if not query_node_matches and ts_retrieval:`, controlled by the retrieve_by_timestamp toggle)
-        # is a separate mechanism and is kept (default ON).
+        # query_node -> R-node matching uses exact match (_node_lookup) only; query_node candidates
+        #   with no exact match are discarded. The timestamp retrieval below (`if not
+        #   query_node_matches and ts_retrieval:`, gated by the retrieve_by_timestamp toggle) is a
+        #   separate mechanism (default ON).
         query_node_matches = [
             _node_lookup[get_clean_entity(c)]
             for c in query_node_candidates
@@ -1027,8 +1030,8 @@ class GroupChatMem(Memory):
                 metrics=metrics,
             )
         if not query_node_matches and ts_retrieval:
-            # timestamp retrieval over the combined KG (C=A+B), not self._graph.
-            retrieved = _retrieve_by_timestamp(kg, timestamps)
+            # timestamp retrieval over the combined fact store (C=A+B), not self._graph.
+            retrieved = _retrieve_by_timestamp(records, timestamps)
         else:
             seeds = list(query_node_matches)
             seen: set[str] = set()
@@ -1038,8 +1041,8 @@ class GroupChatMem(Memory):
                     if s in seen:
                         continue
                     seen.add(s)
-                    # 2-hop traversal over the combined KG (C=A+B), not self._graph.
-                    for q in kg.one_hop(s):
+                    # 2-hop traversal over the combined fact store (C=A+B), not self._graph.
+                    for q in records.one_hop(s):
                         if q not in retrieved:
                             retrieved.append(q)
                             for ent in (q["head"], q["tail"]):
@@ -1212,7 +1215,7 @@ class GroupChatMem(Memory):
         kind in {"IDK", "STOP", "ENTITY"}:
           - "IDK"    : "I don't know"-like -> model declares it can't answer -> caller confirms (E) and stops.
           - "STOP"   : "UNKNOWN"-like -> no more entity to find -> stop the cycle (finish with enhanced full).
-          - "ENTITY" : otherwise -> entity name (first line). Caller tries KG resolve.
+          - "ENTITY" : otherwise -> entity name (first line). Caller tries fact-store resolve.
         Based on the first non-blank line, ignoring case/punctuation/quotes.
         """
         raw = (text or "").strip()
@@ -1255,8 +1258,8 @@ class GroupChatMem(Memory):
                          if isinstance(getattr(it, "meta", None), dict)]
 
         cur_partial = current_session.partial_records if current_session is not None else None
-        kg = self._graph.combined_until(idx, cur_partial)
-        nodes = kg.nodes()
+        records = self._graph.combined_until(idx, cur_partial)
+        nodes = records.nodes()
         node_lookup: dict[str, str] = {}
         for n in nodes:
             node_lookup.setdefault(get_clean_entity(n), n)
@@ -1333,7 +1336,7 @@ class GroupChatMem(Memory):
                 break
 
             # (2) among one-hop records, accumulate as new records only those "not in the previous QA prompt (initial triples + existing accumulation)".
-            bq = kg.one_hop(node)
+            bq = records.one_hop(node)
             added = 0
             for q in bq:
                 k = (q.get("head"), q.get("relation"), q.get("tail"), q.get("start_date"))
@@ -1359,7 +1362,9 @@ class GroupChatMem(Memory):
             ans_prompt = self._cap_prompt(ans_prompt)
             gen_ans = self.llm.generate(ans_prompt)
             metrics = metrics.merge(gen_ans.to_metrics())
-            if process_answer(gen_ans.text) != "(E)":
+            # Pass question.options so prose abstention ("I don't know") maps to (E) under the
+            #   unstructured / open-ended formats (see the note in answer()).
+            if process_answer(gen_ans.text, list(question.options)) != "(E)":
                 r2 = RetrievalResult(
                     items=list(r1.items), rendered="",
                     extra={
@@ -1435,17 +1440,17 @@ class GroupChatMem(Memory):
         - If precomputed_query_nodes[question_idx] exists, skip the LLM (precompute first, same pattern as precomputed routing).
         - Otherwise split nodes into query_node_batch_size (default 100) chunks and call _query_node_one_batch per batch ->
           merge candidates (dedup, first-seen order). By design: 100-batch.
-        Returns: (kg_nodes: list[str], raw_subjects: list[str], last_prompt_text: str)
-        - kg_nodes: the final query_node after mapping the stage2 LLM output to KG nodes and applying the _allowed filter
+        Returns: (query_nodes: list[str], raw_subjects: list[str], last_prompt_text: str)
+        - query_nodes: the final query_node after mapping the stage2 LLM output to fact-store nodes and applying the _allowed filter
           (used by ablation).
-        - raw_subjects: the raw question subjects emitted by the stage2 LLM (*before* KG mapping/_allowed filter, for
-          analysis). By design, both raw + kg_nodes are stored.
+        - raw_subjects: the raw question subjects emitted by the stage2 LLM (*before* fact-store mapping/_allowed filter, for
+          analysis). By design, both raw + query_nodes are stored.
         - prompt_text: the full prompt of the last batch (empty string if no LLM call/precompute).
         """
         # precompute first (per-llm query_node.json) - 0 LLM calls.
         if question_idx is not None and question_idx in self.precomputed_query_nodes:
             return list(self.precomputed_query_nodes[question_idx]), [], ""
-        # Review #2 MEDIUM-E11: trivial return when nodes < k (sparse KG) - LLM skip.
+        # Review #2 MEDIUM-E11: trivial return when nodes < k (sparse fact store) - LLM skip.
         if not nodes:
             return [], [], ""
         k = min(self.num_query_nodes, len(nodes))
@@ -1516,7 +1521,7 @@ class GroupChatMem(Memory):
             if question.questioner:
                 _allowed.add(question.questioner)
             filtered = [c for c in final if c in _merged_set and c in _allowed]
-            # raw_subjects = the stage2 LLM output final (before KG mapping/_allowed filter).
+            # raw_subjects = the stage2 LLM output final (before fact-store mapping/_allowed filter).
             raw_subjects = list(final)
             # Prevent 0-candidate collapse from stage2 LLM caprice: if stage1 has candidates but stage2 discards
             #   them all, keep the top k of stage1 (within allowed) (avoids wiping out query_node-based record retrieval).
@@ -1530,7 +1535,7 @@ class GroupChatMem(Memory):
             debug_out[question_idx] = {
                 "merged": list(merged),
                 "raw_subjects": list(raw_subjects),
-                "kg_nodes": list(result),
+                "query_nodes": list(result),
             }
         return result, raw_subjects, last_prompt
 
@@ -1600,13 +1605,13 @@ def _date_matches_any(session_date: str, q_timestamps: dict) -> bool:
     return False
 
 
-def _retrieve_by_timestamp(kg: RelationalGraph, timestamps: dict) -> list[dict]:
+def _retrieve_by_timestamp(records: RelationalGraph, timestamps: dict) -> list[dict]:
     out: list[dict] = []
     for t, meta in timestamps.items():
         tp = meta["type"]
-        for h in kg.graph:
-            for r in kg.graph[h]:
-                for ts in kg.graph[h][r]:
+        for h in records.graph:
+            for r in records.graph[h]:
+                for ts in records.graph[h][r]:
                     match = False
                     if tp == "month_day_year":
                         match = ts == t
@@ -1617,9 +1622,9 @@ def _retrieve_by_timestamp(kg: RelationalGraph, timestamps: dict) -> list[dict]:
                         parts = ts.split() if ts else []
                         match = bool(parts) and parts[-1] == t
                     if match:
-                        for tl in kg.graph[h][r][ts]:
+                        for tl in records.graph[h][r][ts]:
                             q = {"head": h, "relation": r, "tail": tl, "start_date": ts,
-                                 "sess_idx": kg.record_sess.get((h, r, tl, ts))}
+                                 "sess_idx": records.record_sess.get((h, r, tl, ts))}
                             if q not in out and is_valid_record(q):
                                 out.append(q)
     return out

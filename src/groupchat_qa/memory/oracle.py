@@ -320,7 +320,10 @@ class OracleMemory(Memory):
 
         # If dual (dialogue+records already provided together), fallback off, or not
         #   (E), finalize the first answer - enhanced has no opposite modality, so (E)-fallback is meaningless.
-        if self.dual or self.records_only or not self.fallback or process_answer(gen1.text) != "(E)":
+        #   Pass question.options so prose abstention ("I don't know") maps to (E) under the
+        #   unstructured / open-ended formats (process_answer step-7b option-text matching).
+        if (self.dual or self.records_only or not self.fallback
+                or process_answer(gen1.text, list(question.options)) != "(E)"):
             return gen1.text, r1, metrics
 
         # (E) -> try once more with the opposite modality.
