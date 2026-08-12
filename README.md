@@ -1,7 +1,7 @@
 <!-- Last update: 2026-08-03 -->
-# GroupChat-Mem
+# GroupChat-Bench
 
-**A dual-view memory for long-term understanding of realistic group chats.**
+**Benchmarking LLM Agents on Long-Term Understanding of Realistic Group Chats.**
 
 Reference implementation of **GroupChat-Mem**, the memory system proposed in
 *"GroupChat-Bench: Benchmarking LLM Agents on Long-Term Understanding of Realistic
