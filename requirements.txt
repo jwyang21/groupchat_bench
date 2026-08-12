@@ -21,10 +21,8 @@ nltk                # word tokenization for BM25
 # Structured LLM output schemas
 pydantic
 
-# ---------------------------------------------------------------------------
 # Optional dependencies (imported lazily only when the corresponding feature
 # or provider is selected in the config). Uncomment as needed.
-# ---------------------------------------------------------------------------
 # langchain-google-genai    # provider: google
 # sentence-transformers     # embedder backend: sentence_transformer
 # torch                     # cross-encoder reranker (reranker != none)

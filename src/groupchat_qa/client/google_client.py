@@ -20,4 +20,7 @@ class GoogleClient(LLM):
 
     def _extract_usage(self, response: Any) -> tuple[int, int]:
         usage = getattr(response, "usage_metadata", None) or {}
-        return int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
+        return (
+            int(usage.get("input_tokens", 0)),
+            int(usage.get("output_tokens", 0)),
+        )

@@ -28,4 +28,7 @@ def make_llm(provider: str, model_name: str, **kwargs: Any) -> LLM:
     if provider == "google":
         from .google_client import GoogleClient
         return GoogleClient(model_name=model_name, **kwargs)
-    raise ValueError(f"Unknown provider: {provider!r}. Expected one of: vllm/openai/google.")
+    raise ValueError(
+        f"Unknown provider: {provider!r}. Expected one of: "
+        "vllm/openai/google."
+    )

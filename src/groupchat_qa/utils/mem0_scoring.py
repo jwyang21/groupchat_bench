@@ -1,23 +1,31 @@
-"""Faithful reimplementation of mem0's official hybrid scoring (mem0/utils/scoring.py + lemmatization.py).
+"""Faithful reimplementation of mem0's official hybrid scoring
+(mem0/utils/scoring.py + lemmatization.py).
 
-Source: https://github.com/mem0ai/mem0/blob/b55c51e0049f6fb8dbf4f39b3405e80de905ab22/mem0/utils/scoring.py
-      (lemmatize: .../mem0/utils/lemmatization.py, caller: .../mem0/memory/main.py:_search_vector_store)
+See the ``Source`` comment below the docstring for the upstream URL.
 
 Official algorithm (score_and_rank):
   combined = min((semantic + bm25 + entity_boost) / max_possible, 1.0)
-  - candidates with semantic < threshold (=0.1) are gated out before the hybrid combination.
+  - candidates with semantic < threshold (=0.1) are gated out before the
+    hybrid combination.
   - max_possible = 1.0 (+1.0 if bm25, +0.5 if entity). entity weight = 0.5.
   - sort by combined descending -> top_k.
-  get_bm25_params: (midpoint, steepness) by query length. normalize_bm25: logistic sigmoid.
+  get_bm25_params: (midpoint, steepness) by query length. normalize_bm25:
+    logistic sigmoid.
 
 Our adaptation (1:1 with the official _search_vector_store):
   - semantic = cosine similarity (official vector_store.search score).
-  - bm25 raw = BM25Okapi.get_scores (replaces the official vector_store.keyword_search raw_score) -> normalize_bm25.
-  - entity_boosts = {} - our mem0 does not use graph memory, so there are no query_entities/graph
-    (the official code also sets entity_boosts={} when there are no query_entities; has_entity=False -> max_possible=2.0).
+  - bm25 raw = BM25Okapi.get_scores (replaces the official
+    vector_store.keyword_search raw_score) -> normalize_bm25.
+  - entity_boosts = {} - our mem0 does not use graph memory, so there are no
+    query_entities/graph (the official code also sets entity_boosts={} when
+    there are no query_entities; has_entity=False -> max_possible=2.0).
   - threshold = 0.1 (official _search_vector_store default).
 """
 from __future__ import annotations
+
+# Source: github.com/mem0ai/mem0 (commit b55c51e0)
+#   mem0/utils/scoring.py and mem0/utils/lemmatization.py;
+#   caller mem0/memory/main.py:_search_vector_store
 
 import math
 from typing import Any
@@ -25,26 +33,31 @@ from typing import Any
 # Constants copied from the official scoring.py.
 ENTITY_BOOST_WEIGHT = 0.5
 
-# One-time spaCy lemmatizer load cache (mirrors the official lemmatization.py get_nlp_lemma).
+# One-time spaCy lemmatizer load cache (mirrors the official lemmatization.py
+# get_nlp_lemma).
 _NLP: Any = None
 
 
 def lemmatize_for_bm25(text: str) -> str:
-    """Lemmatize for BM25 matching (as in the official mem0/utils/lemmatization.py).
+    """Lemmatize for BM25 matching (as in the official
+    mem0/utils/lemmatization.py).
 
-    Extract lemmas with spaCy (lowercase, excluding punct/stop). For -ing forms, if the
-    surface form differs from the lemma, also add the surface form (noun/verb ambiguity,
-    e.g. meeting/meet). If spaCy is unavailable, fall back to the original text (as in the official code).
+    Extract lemmas with spaCy (lowercase, excluding punct/stop). For -ing
+    forms, if the surface form differs from the lemma, also add the surface
+    form (noun/verb ambiguity, e.g. meeting/meet). If spaCy is unavailable,
+    fall back to the original text (as in the official code).
     """
     global _NLP
     if _NLP is None:
         try:
             import spacy
 
-            # tagger/attribute_ruler suffice for lemmas - disable parser/ner for efficiency.
+            # tagger/attribute_ruler suffice for lemmas - disable parser/ner
+            # for efficiency.
             _NLP = spacy.load("en_core_web_sm", disable=["parser", "ner"])
         except Exception:
-            _NLP = False  # load-failure marker -> always fall back to the original text.
+            # load-failure marker -> always fall back to the original text.
+            _NLP = False
     if not _NLP:
         return text
 
@@ -56,17 +69,24 @@ def lemmatize_for_bm25(text: str) -> str:
         lemma = token.lemma_
         if lemma.isalnum():
             tokens.append(lemma)
-        # If the surface form ends in -ing and differs from the lemma, also add the surface form
+        # If the surface form ends in -ing and differs from the lemma, also add
+        # the surface form
         # (handles noun/verb ambiguity - as in the official code).
-        if token.text.endswith("ing") and token.text != lemma and token.text.isalnum():
+        _ing = token.text.endswith("ing")
+        _diff = token.text != lemma
+        if _ing and _diff and token.text.isalnum():
             tokens.append(token.text)
     return " ".join(tokens)
 
 
-def get_bm25_params(query: str, *, lemmatized: str | None = None) -> tuple[float, float]:
-    """BM25 sigmoid parameters by query length (as in the official scoring.py).
+def get_bm25_params(
+    query: str, *, lemmatized: str | None = None
+) -> tuple[float, float]:
+    """BM25 sigmoid parameters by query length (as in the official
+    scoring.py).
 
-    Longer queries produce larger raw BM25 scores, so midpoint/steepness are adjusted.
+    Longer queries produce larger raw BM25 scores, so midpoint/steepness are
+    adjusted.
     Returns: (midpoint, steepness).
     """
     if lemmatized is None:
@@ -85,8 +105,13 @@ def get_bm25_params(query: str, *, lemmatized: str | None = None) -> tuple[float
         return 12.0, 0.5
 
 
-def normalize_bm25(raw_score: float, midpoint: float, steepness: float) -> float:
-    """Normalize raw BM25 to [0,1] via a logistic sigmoid (as in the official scoring.py)."""
+def normalize_bm25(
+    raw_score: float, midpoint: float, steepness: float
+) -> float:
+    """Normalize raw BM25 to [0,1] via a logistic sigmoid.
+
+    As in the official scoring.py.
+    """
     return 1.0 / (1.0 + math.exp(-steepness * (raw_score - midpoint)))
 
 
@@ -100,9 +125,11 @@ def score_and_rank(
 ) -> list[dict[str, Any]]:
     """As in the official mem0/utils/scoring.py score_and_rank.
 
-    Per candidate: semantic_score = result["score"]. Gate out (before combining) if semantic < threshold.
+    Per candidate: semantic_score = result["score"]. Gate out (before
+    combining) if semantic < threshold.
     combined = min((semantic + bm25 + entity_boost) / max_possible, 1.0).
-    max_possible = 1.0 (+1.0 if bm25, +0.5 if entity). Sort by combined descending, take top_k.
+    max_possible = 1.0 (+1.0 if bm25, +0.5 if entity). Sort by combined
+    descending, take top_k.
     """
     has_bm25 = bool(bm25_scores)
     has_entity = bool(entity_boosts)

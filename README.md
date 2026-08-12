@@ -1,13 +1,14 @@
-<!-- Last update: 2026-08-03 -->
-# GroupChat-Bench
+# GroupChat-Bench: Benchmarking LLM Agents on Long-Term Understanding of Realistic Group Chats
 
-**Benchmarking LLM Agents on Long-Term Understanding of Realistic Group Chats.**
+**A benchmark for evaluating LLM agents on long-term understanding of
+realistic group chats.**
 
-Reference implementation of **GroupChat-Mem**, the memory system proposed in
-*"GroupChat-Bench: Benchmarking LLM Agents on Long-Term Understanding of Realistic
-Group Chats."* GroupChat-Mem combines a structured **relational memory** with a
-**raw session repository** and retrieves from both to answer questions over long,
-multi-party group-chat histories.
+Code and data release for **GroupChat-Bench**, a benchmark that evaluates
+LLM agents on long-term understanding of realistic, multi-party group-chat
+histories. This repository also includes the reference implementation of
+**GroupChat-Mem**, the memory system proposed alongside the benchmark, which
+combines a structured **relational memory** with a **raw session repository**
+and retrieves from both to answer questions over long group-chat histories.
 
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 

@@ -32,11 +32,11 @@ embedder:
 memory:
   name: a_mem
   k_neighbors: 5
-  num_retrieved: 100
-  context_size: 8000
+  num_retrieved: 170
+  context_size: 0
   question_format: multi_structured
   split_link_evolution: false
-  include_linked: true
+  include_linked: false
   prompt_note: a_mem_note_construction.txt
   prompt_evolution: a_mem_evolution.txt
   prompt_link: a_mem_link_judge.txt
@@ -44,6 +44,8 @@ memory:
   turns_per_note: 5
   extract_cache: true
   session_checkpoint: true
+qa:
+  answer_budget: 10000        # reasoning-token budget for QA answering
 run:
   seed: 42
   start_session_idx: 0

@@ -1,6 +1,7 @@
 """Question format converter - render the same question/options in three ways.
 
-  - multi_structured : the default multiple-choice form (options A-E listed explicitly)
+  - multi_structured : the default multiple-choice form (options A-E
+    listed explicitly)
   - multi_unstructured: "{question} {opt_a}? {opt_b}? ... or {opt_e}?"
   - open_ended       : "{question}" (options removed)
 
@@ -22,7 +23,8 @@ def render_question(q: Question, format: str = "multi_structured") -> str:
         format: 'multi_structured' / 'multi_unstructured' / 'open_ended'
 
     Returns: the final question string including the questioner prefix.
-          e.g. "Joey: So, what does Mrs. bing do?\n\t(A) Butt double\n\t(B) ..."
+          e.g. "Joey: So, what does Mrs. bing do?\n\t(A) Butt double\n\t
+          (B) ..."
     """
     fmt = format.lower().replace("-", "_")
     if fmt == "multi_structured":
@@ -41,16 +43,25 @@ def _multi_structured(q: Question) -> str:
     """`questioner: text\n\t(A) ...\n\t(B) ...` (the default form)."""
     out = f"{q.questioner}: {q.text}\n"
     for i, opt in enumerate(q.options):
-        # If there are more than 5 options, OPTION_LABELS[i] would IndexError, so generate
-        #   labels dynamically ((F),(G)..) as a guard (5 options by default, but this avoids a crash
+        # If there are more than 5 options, OPTION_LABELS[i] would IndexError,
+        # so generate
+        # labels dynamically ((F),(G)..) as a guard (5 options by default, but
+        # this avoids a crash
         #   on malformed/extended data).
-        label = OPTION_LABELS[i] if i < len(OPTION_LABELS) else f"({chr(65 + i)})"
+        label = (
+            OPTION_LABELS[i]
+            if i < len(OPTION_LABELS)
+            else f"({chr(65 + i)})"
+        )
         out += f"\t{label} {opt}\n"
     return out.strip()
 
 
 def _multi_unstructured(q: Question) -> str:
-    """`questioner: text {opt_a}? {opt_b}? ... or {opt_e}?` (options phrased as natural-language questions)."""
+    """`questioner: text {opt_a}? {opt_b}? ... or {opt_e}?`
+
+    (options phrased as natural-language questions).
+    """
     if len(q.options) < 2:
         return _open_ended(q)
     opts = list(q.options)

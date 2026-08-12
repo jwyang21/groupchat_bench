@@ -3,17 +3,21 @@
 The fanquiz question timestamp supports a **date range** format:
   - same-month  : "September 22-23, 1994"
   - cross-month : "September 23-October 15, 2007"
-  - (cross-year "Y/M/D-Y/M/D" ranges do not occur in the data and are unsupported)
-For a range, `extract_timestamps` **expands every included day into its own "Month D, Year"
-string** and returns them. Each day is then classified by classify_timestamp as
-'month_day_year' and filtered by the existing exact-match logic in `_date_matches_any`
-(experiment code unchanged).
+  - (cross-year "Y/M/D-Y/M/D" ranges do not occur in the data and are
+    unsupported)
+For a range, `extract_timestamps` **expands every included day into its own
+"Month D, Year" string** and returns them. Each day is then classified by
+classify_timestamp as 'month_day_year' and filtered by the existing
+exact-match logic in `_date_matches_any` (experiment code unchanged).
 """
 import calendar
 import re
 from datetime import date, datetime, timedelta
 
-_MONTH = r"(January|February|March|April|May|June|July|August|September|October|November|December)"
+_MONTH = (
+    r"(January|February|March|April|May|June|July|"
+    r"August|September|October|November|December)"
+)
 _MONTHS_ALT = (r"January|February|March|April|May|June|July|"
                r"August|September|October|November|December")
 _MONTH_TO_NUM = {m.lower(): i for i, m in enumerate(
@@ -27,12 +31,14 @@ _PATTERN_YEAR = re.compile(r"(?<!\S)\d{4}(?!\s*bucks\b)")
 _PATTERN_MDY_FULL = re.compile(rf"^{_MONTH} \d{{1,2}}, \d{{4}}$")
 _PATTERN_MY_FULL = re.compile(rf"^{_MONTH} \d{{4}}$")
 
-# Date range: "Month D - [Month] D, YYYY" (same-month + cross-month), with a single trailing
+# Date range: "Month D - [Month] D, YYYY" (same-month + cross-month), with a
+# single trailing
 # year. The connector is only hyphen/en-dash/em-dash - word connectors like
-# "to"/"and" are excluded because they risk false matches in question prose (and the data uses hyphens only).
+# "to"/"and" are excluded because they risk false matches in question prose
+# (and the data uses hyphens only).
 _RANGE_PAT = re.compile(
     rf"\b(?P<m1>{_MONTHS_ALT})\s+(?P<d1>\d{{1,2}})(?:st|nd|rd|th)?"
-    r"\s*[---]\s*"
+    r"\s*[-–—]\s*"
     rf"(?:(?P<m2>{_MONTHS_ALT})\s+)?"
     r"(?P<d2>\d{1,2})(?:st|nd|rd|th)?"
     r"(?:,?\s*(?P<y>\d{4}))",
@@ -40,11 +46,15 @@ _RANGE_PAT = re.compile(
 )
 
 
-def _enumerate_range_days(y: int, m1: int, d1: int, m2: int, d2: int) -> list[str]:
-    """Expand the range [m1/d1 .. m2/d2] (year y) into a list of "Month D, Year" day strings.
+def _enumerate_range_days(
+    y: int, m1: int, d1: int, m2: int, d2: int
+) -> list[str]:
+    """Expand the range [m1/d1 .. m2/d2] (year y) into a list of "Month D,
+    Year" day strings.
 
-    For cross-month, iterate day by day with datetime. If m2 < m1, the year wraps around (y+1).
-    Returns an empty list if the date is invalid (e.g. leap-year edge cases).
+    For cross-month, iterate day by day with datetime. If m2 < m1, the year
+    wraps around (y+1). Returns an empty list if the date is invalid (e.g.
+    leap-year edge cases).
     """
     y2 = y + 1 if m2 < m1 else y
     try:
@@ -67,9 +77,12 @@ def _enumerate_range_days(y: int, m1: int, d1: int, m2: int, d2: int) -> list[st
 def extract_timestamps(q: str) -> list[str]:
     """Extract all timestamps from a question string.
 
-    1) Match date ranges (fanquiz) first -> expand every included day into "Month D, Year".
-    2) Then match single patterns (month_day_year / month_year / year_only) - skip any that overlap a range span.
-    Overlap avoidance: process from the most specific pattern first, skipping matches that overlap an already-taken span.
+    1) Match date ranges (fanquiz) first -> expand every included day into
+       "Month D, Year".
+    2) Then match single patterns (month_day_year / month_year / year_only)
+       - skip any that overlap a range span.
+    Overlap avoidance: process from the most specific pattern first, skipping
+    matches that overlap an already-taken span.
     """
     used_spans: list[tuple[int, int]] = []
 
@@ -103,9 +116,12 @@ def extract_timestamps(q: str) -> list[str]:
 
 
 def classify_timestamp(t: str) -> str:
-    """Classify a timestamp's type - 'month_day_year' / 'month_year' / 'year_only'.
+    """Classify a timestamp's type.
 
-    A day expanded from a range is in "Month D, Year" form, so it classifies as 'month_day_year'.
+    'month_day_year' / 'month_year' / 'year_only'.
+
+    A day expanded from a range is in "Month D, Year" form, so it classifies
+    as 'month_day_year'.
     """
     if _PATTERN_MDY_FULL.match(t):
         return "month_day_year"
@@ -115,7 +131,8 @@ def classify_timestamp(t: str) -> str:
 
 
 def parse_timestamp(timestamp: str) -> datetime:
-    """Parse a timestamp string into a datetime, trying the formats in order."""
+    """Parse a timestamp string into a datetime, trying the formats in
+    order."""
     for fmt in ("%B %d, %Y", "%B %Y", "%Y"):
         try:
             return datetime.strptime(timestamp, fmt)
@@ -126,11 +143,13 @@ def parse_timestamp(timestamp: str) -> datetime:
 
 # For the "question embedding type" axis - generate the non-temporal question.
 #   - temporal     = embed the whole question
-#   - non_temporal = remove each timestamp plus the one time-preposition word before it
-#                    (on/in/by, ...) and strip. If the question has no timestamp, the result
+# - non_temporal = remove each timestamp plus the one time-preposition word
+# before it
+# (on/in/by, ...) and strip. If the question has no timestamp, the result
 #                    equals the original question (non_temporal == temporal).
 # Time prepositions commonly preceding a timestamp; matched on word boundaries.
-# `at` is time/place ambiguous but included since time expressions like "at 1994" are common.
+# `at` is time/place ambiguous but included since time expressions like "at
+# 1994" are common.
 _TIME_PREP_WORDS = (
     "on", "in", "by", "at", "of", "during", "from", "after", "before",
     "since", "until", "till", "around", "about",
@@ -144,8 +163,8 @@ _TIME_PREP_TRAILING = re.compile(
 def _collect_timestamp_spans(q: str) -> list[tuple[int, int]]:
     """Collect all timestamp spans (start, end) from a question string.
 
-    Applies the same patterns as `extract_timestamps` (range + 3 singles), except a range
-    yields its whole match span once (not per expanded day).
+    Applies the same patterns as `extract_timestamps` (range + 3 singles),
+    except a range yields its whole match span once (not per expanded day).
     """
     spans: list[tuple[int, int]] = []
     used: list[tuple[int, int]] = []
@@ -170,9 +189,11 @@ def _collect_timestamp_spans(q: str) -> list[tuple[int, int]]:
 
 
 def strip_question_timestamp(q: str) -> str:
-    """Remove every timestamp plus the one word before it from question q, then clean whitespace.
+    """Remove every timestamp plus the one word before it from question q,
+    then clean whitespace.
 
-    If there is no timestamp, return the original (strip + collapsing repeated whitespace is always applied).
+    If there is no timestamp, return the original (strip + collapsing
+    repeated whitespace is always applied).
     """
     if not q:
         return q
@@ -185,8 +206,10 @@ def strip_question_timestamp(q: str) -> str:
     for start, end in spans_sorted:
         before = out[:start]
         after = out[end:]
-        # Always remove the single word immediately before the timestamp, regardless of part of speech.
-        #   "the word immediately before" = the last whitespace-separated token (\S+) of `before`;
+        # Always remove the single word immediately before the timestamp,
+        # regardless of part of speech.
+        # "the word immediately before" = the last whitespace-separated token
+        # (\S+) of `before`;
         #   if there is none (empty/whitespace), remove nothing.
         stripped_before = before.rstrip()
         m = re.search(r"\S+\s*$", stripped_before)
@@ -200,9 +223,11 @@ def strip_question_timestamp(q: str) -> str:
     # Clean whitespace before punctuation (e.g. " , " -> " ", keep " ?").
     out = re.sub(r"\s+([?!.,;:])", r"\1", out)
     # Remove leading/trailing punctuation/whitespace garbage.
-    # "In 1994, what..." -> removing "In 1994" leaves ", what..." -> strip the ", " prefix.
+    # "In 1994, what..." -> removing "In 1994" leaves ", what..." -> strip the
+    # ", " prefix.
     out = re.sub(r"^[\s,;:.]+", "", out)
-    # Dedup adjacent commas ("June 1994, on July 1995, what" -> "June 1994, July 1995, what").
+    # Dedup adjacent commas ("June 1994, on July 1995, what" -> "June 1994,
+    # July 1995, what").
     out = re.sub(r",\s*,+", ",", out)
     # Normalize spacing after commas.
     out = re.sub(r"\s*,\s*", ", ", out)

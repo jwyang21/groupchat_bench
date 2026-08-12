@@ -24,7 +24,11 @@ from .filesys_utils import (
     local_first,
 )
 from .random_utils import seed_everything
-from .tokenize_utils import apply_token_limit, count_tokens, trim_text_to_tokens
+from .tokenize_utils import (
+    apply_token_limit,
+    count_tokens,
+    trim_text_to_tokens,
+)
 from .timestamp_utils import (
     extract_timestamps,
     classify_timestamp,

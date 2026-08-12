@@ -12,15 +12,25 @@ from groupchat_qa.embedder import Embedder
 from .base import Memory
 
 
-def make_memory(name: str, llm: LLM, embedder: Embedder, cfg: dict[str, Any]) -> Memory:
+def make_memory(
+    name: str,
+    llm: LLM,
+    embedder: Embedder,
+    cfg: dict[str, Any],
+) -> Memory:
     """Map a memory name to a Memory instance.
 
     Supported:
-      - "groupchat_mem" : the proposed method (dual-view relational memory R + raw session repository S).
-      - "simple_rag"    : Simple RAG / Direct QA reference baselines (BM25 or embedding retrieval; no-history).
-      - "a_mem"         : A-MEM - interlinked memory notes with dynamic linking/evolution.
-      - "hipporag2"     : HippoRAG 2 - OpenIE-based relational fact store + Personalized PageRank retrieval.
-      - "mem0"          : Mem0 - fact extraction + add/update/delete consolidation, dense retrieval.
+      - "groupchat_mem" : the proposed method (dual-view relational memory
+        R + raw session repository S).
+      - "simple_rag"    : Simple RAG / Direct QA reference baselines (BM25
+        or embedding retrieval; no-history).
+      - "a_mem"         : A-MEM - interlinked memory notes with dynamic
+        linking/evolution.
+      - "hipporag2"     : HippoRAG 2 - OpenIE-based relational fact store +
+        Personalized PageRank retrieval.
+      - "mem0"          : Mem0 - fact extraction + add/update/delete
+        consolidation, dense retrieval.
       - "oracle"        : oracle upper bound (perfect retrieval + routing).
     """
     name = name.lower()

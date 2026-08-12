@@ -31,8 +31,8 @@ embedder:
 memory:
   name: mem0
   top_s: 10
-  top_k: 600
-  context_size: 8000
+  top_k: 1700
+  context_size: 0
   question_format: multi_structured
   prompt_fact_extraction: mem0_fact_triple_extraction.txt
   prompt_update_decision: mem0_update_decision.txt
@@ -41,6 +41,8 @@ memory:
   extract_cache: true
   session_checkpoint: true
   turns_per_batch: 5
+qa:
+  answer_budget: 10000        # reasoning-token budget for QA answering
 run:
   seed: 42
   start_session_idx: 0

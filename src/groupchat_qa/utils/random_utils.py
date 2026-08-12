@@ -8,8 +8,8 @@ import numpy as np
 def seed_everything(seed: int = 42) -> None:
     """Fix the seed for python / numpy / (optionally) torch at once.
 
-    torch is imported lazily so this function can be imported even in environments
-    without torch.
+    torch is imported lazily so this function can be imported even in
+    environments without torch.
     """
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)

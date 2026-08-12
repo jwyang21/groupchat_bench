@@ -25,13 +25,16 @@ class OpenAIEmbedder(Embedder):
     }
 
     def __init__(self, model: str = "text-embedding-3-small") -> None:
-        # If OPENAI_API_KEY is unset, the client is created silently and fails with an opaque 401 on
-        # the first embed call, aborting mid-ablation. Validate up front to fail fast.
+        # If OPENAI_API_KEY is unset, the client is created silently and fails
+        # with an opaque 401 on
+        # the first embed call, aborting mid-ablation. Validate up front to
+        # fail fast.
         import os
         if not os.environ.get("OPENAI_API_KEY"):
             raise RuntimeError(
-                "OPENAI_API_KEY environment variable is not set. Put the key in a .env file or "
-                "export it, then retry. (Check that load_project_env() was called.)"
+                "OPENAI_API_KEY environment variable is not set. Put the "
+                "key in a .env file or export it, then retry. (Check that "
+                "load_project_env() was called.)"
             )
         self.model = model
         from langchain_openai import OpenAIEmbeddings
@@ -47,7 +50,8 @@ class OpenAIEmbedder(Embedder):
         return self._DIM_MAP.get(self.model, 1536)
 
     def embed(self, texts: list[str]) -> np.ndarray:
-        # empty input -> explicit (0,D) (keeps the (N,D) contract, avoids an unnecessary API call).
+        # empty input -> explicit (0,D) (keeps the (N,D) contract, avoids an
+        # unnecessary API call).
         if not texts:
             return np.zeros((0, self.dim), dtype=np.float32)
         vecs = self._client.embed_documents(texts)

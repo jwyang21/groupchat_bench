@@ -1,9 +1,11 @@
 """Helper to auto-discover and load the project root's .env.
 
 Principles:
-  - Never hardcode absolute paths. Traverse upward from the calling file to find the
-    first directory containing a .env (the groupchat_qa project root).
-  - Never put secrets like OPENAI_API_KEY in yaml; inject them from .env instead.
+  - Never hardcode absolute paths. Traverse upward from the calling file to
+    find the first directory containing a .env (the groupchat_qa project
+    root).
+  - Never put secrets like OPENAI_API_KEY in yaml; inject them from .env
+    instead.
 
 Usage (right after imports in the run entry points):
     from groupchat_qa.utils import load_project_env
@@ -16,10 +18,12 @@ from pathlib import Path
 
 
 def find_project_env(start: Path | str | None = None) -> Path | None:
-    """Traverse upward from the current file (or `start`) and return the .env path of the first directory containing `.env`.
+    """Traverse upward from the current file (or `start`) and return the
+    .env path of the first directory containing `.env`.
 
     Args:
-        start: directory to start searching from. If None, uses this module's location (`env_utils.py`).
+        start: directory to start searching from. If None, uses this
+               module's location (`env_utils.py`).
                Pass `__file__` to search relative to the caller's location.
 
     Returns: the Path to `.env`, or None if not found.
@@ -37,14 +41,21 @@ def find_project_env(start: Path | str | None = None) -> Path | None:
     return None
 
 
-def load_project_env(start: Path | str | None = None, override: bool = False) -> Path | None:
-    """Auto-discover `.env`, then call `load_dotenv`. Returns None if not found.
+def load_project_env(
+    start: Path | str | None = None,
+    override: bool = False,
+) -> Path | None:
+    """Auto-discover `.env`, then call `load_dotenv`. Returns None if not
+    found.
 
     Args:
-        start    : where to start searching. If None, uses this module's location.
-        override : if True, overwrite already-set env vars with values from .env (default False).
+        start    : where to start searching. If None, uses this module's
+                   location.
+        override : if True, overwrite already-set env vars with values from
+                   .env (default False).
 
-    Returns: the loaded .env path, or None. Logging is the caller's responsibility.
+    Returns: the loaded .env path, or None. Logging is the caller's
+        responsibility.
     """
     env_path = find_project_env(start)
     if env_path is None:

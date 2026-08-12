@@ -13,14 +13,18 @@ class Embedder(ABC):
       - `OpenAIEmbedder` - text-embedding-3-small, etc.
       - `SentenceTransformerEmbedder` - local ST models
 
-    Design: for a fair baseline comparison, every method must be injected with the *same embedder
-    instance* - created only once based on `embedder.name` in config.
+    Design: for a fair baseline comparison, every method must be injected
+    with the *same embedder instance* - created only once based on
+    `embedder.name` in config.
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Identifier (used in cache keys, etc.). e.g. 'openai:text-embedding-3-small'."""
+        """Identifier (used in cache keys, etc.).
+
+        e.g. 'openai:text-embedding-3-small'.
+        """
         ...
 
     @property
@@ -37,8 +41,11 @@ class Embedder(ABC):
     def embed_one(self, text: str) -> np.ndarray:
         """Convenience: single text -> (D,) vector."""
         vecs = self.embed([text])
-        # If a provider degenerately returns an empty result, surface a meaningful error instead of
+        # If a provider degenerately returns an empty result, surface a
+        # meaningful error instead of
         #   an [0] IndexError.
         if len(vecs) == 0:
-            raise RuntimeError(f"embedder returned no vector for text: {text[:80]!r}")
+            raise RuntimeError(
+                f"embedder returned no vector for text: {text[:80]!r}"
+            )
         return vecs[0]

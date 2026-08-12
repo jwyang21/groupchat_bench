@@ -36,7 +36,7 @@ memory:
   passage_node_weight: 0.05
   damping: 0.5
   num_retrieved: 40
-  context_size: 8000
+  context_size: 0
   use_filter: true
   question_format: multi_structured
   prompt_openie: hipporag2_openie.txt
@@ -45,6 +45,8 @@ memory:
   snapshot_dir: ./result/baseline_snapshots/newname_t0
   extract_cache: true
   session_checkpoint: true
+qa:
+  answer_budget: 10000        # reasoning-token budget for QA answering
 run:
   seed: 42
   start_session_idx: 0
