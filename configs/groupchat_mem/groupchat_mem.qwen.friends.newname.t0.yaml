@@ -29,7 +29,7 @@ groupchat_mem:
       host: <VLLM_HOST>               # e.g. localhost or your vLLM server IP
       port: <VLLM_PORT>               # e.g. 8000
       api_key: EMPTY
-      temperature: 0.6                # Qwen/Gemma decoding (Table 9)
+      temperature: 1.0                # value actually used for GroupChat-Mem / retrieval runs (see docs/260914_qwen_config.md)
       top_p: 0.95
       max_tokens: 16384
       extra_body:

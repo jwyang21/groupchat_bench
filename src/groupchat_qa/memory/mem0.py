@@ -181,6 +181,87 @@ class Mem0ExtractResult:
     metrics: CallMetrics
 
 
+def _group_score(scores: list[float], agg: str) -> float:
+    """Aggregate a group's fact scores into a single sorting key (used when
+    ``group_order='score'`` to order the session groups).
+
+    agg in {"max","mean","median","min"}:
+      - max    : the group's best-fact score (best-evidence group first).
+      - mean   : the group's average relevance.
+      - median : the group's median (robust to a single high outlier).
+      - min    : the group's lowest score (conservative - every fact in the
+                 group must be relevant to rank the group highly).
+    Empty list -> 0.0. Unknown agg -> max fallback.
+    """
+    if not scores:
+        return 0.0
+    if agg == "mean":
+        return float(sum(scores) / len(scores))
+    if agg == "median":
+        s = sorted(scores)
+        n = len(s)
+        mid = n // 2
+        return float(s[mid]) if n % 2 == 1 else float((s[mid - 1] + s[mid]) / 2.0)
+    if agg == "min":
+        return float(min(scores))
+    return float(max(scores))  # "max" (default / fallback)
+
+
+def _format_grouped(
+    recs_scores: list[tuple["MemoryRecord", float]],
+    group_order: str,
+    group_score_agg: str = "max",
+) -> tuple[str, list[Item]]:
+    """Render the retrieved (record, score) facts grouped by their source
+    session, each group under a "[Date: {date} (Session {idx})]" header.
+
+    Within a group: facts are ordered by score (best evidence first).
+    Group placement:
+      - "time"  : ascending session_idx (chronological).
+      - "score" : descending group score (aggregated by ``group_score_agg``);
+                  with agg='max' the best-evidence group is placed first,
+                  mitigating the lost-in-the-middle effect.
+    Returns (rendered_str, items); items are the score-descending flattened
+    facts (same metadata keys as the flat renderer). dataset-agnostic (headers
+    use only the date / integer session index).
+    """
+    groups: dict[tuple[int, str], list[tuple["MemoryRecord", float]]] = {}
+    for rec, sc in recs_scores:
+        key = (int(rec.session_idx), str(rec.date))
+        groups.setdefault(key, []).append((rec, sc))
+
+    for key in groups:  # within-group: score descending
+        groups[key].sort(key=lambda rs: -rs[1])
+
+    group_keys = list(groups.keys())
+    if group_order == "time":
+        group_keys.sort(key=lambda k: (k[0], k[1]))
+    else:  # "score" (default) - ties broken by session_idx for determinism
+        def _gscore(k: tuple[int, str]) -> float:
+            return _group_score([sc for _, sc in groups[k]], group_score_agg)
+        group_keys.sort(key=lambda k: (-_gscore(k), k[0]))
+
+    lines: list[str] = []
+    items: list[Item] = []
+    for key in group_keys:
+        idx, date = key
+        header = f"[Date: {date} (Session {idx})]" if date else f"[Session {idx}]"
+        lines.append(header)
+        for rec, sc in groups[key]:
+            lines.append(f"- {rec.text}")
+            items.append(
+                Item(
+                    text=rec.text,
+                    meta={"id": rec.id, "session_idx": rec.session_idx,
+                          "date": rec.date},
+                    score=float(sc),
+                )
+            )
+        lines.append("")  # blank line between groups (readability)
+    rendered = "\n".join(lines).strip()
+    return rendered, items
+
+
 # Mem0Memory
 class Mem0Memory(Memory):
     """Mem0 baseline - config dict keys:
@@ -192,6 +273,17 @@ class Mem0Memory(Memory):
                              return after re-ranking.
     context_size     : int - final QA prompt token limit (default 0 =
                              off/unlimited; >0 = that value as upper bound).
+    fact_render      : 'flat' (one '- fact' per line, score-descending) or
+                       'grouped' (facts grouped by source session with date
+                       headers). Default 'grouped'.
+    group_order      : when fact_render='grouped', how the session groups are
+                       ordered: 'score' (by group relevance, default) or
+                       'time' (chronological session_idx).
+    group_score_agg  : group-relevance aggregation for group_order='score':
+                       'max' (default) / 'mean' / 'median' / 'min'.
+    dedup            : bool - merge near-duplicate facts before rendering
+                       (cosine >= dedup_tau). Default False.
+    dedup_tau        : float - dedup cosine threshold. Default 0.95.
     prompt_fact_extraction : fact extraction prompt filename (default
                              mem0_fact_extraction.txt).
     prompt_update_decision : update-decision prompt filename (default
@@ -232,6 +324,16 @@ class Mem0Memory(Memory):
         # 0/negative = token limit off (unlimited)
         self.context_size = int(cfg.get("context_size", 0))
         self.question_format = cfg.get("question_format", "multi_structured")
+        # Retrieval rendering: how the retrieved facts are laid out in the QA
+        # prompt. 'grouped' groups the facts by their source session (date
+        # headers) - the setting used in the paper; 'flat' is one '- fact' per
+        # line in score order.
+        self.fact_render = str(cfg.get("fact_render", "grouped")).lower()
+        self.group_order = str(cfg.get("group_order", "score")).lower()
+        self.group_score_agg = str(cfg.get("group_score_agg", "max")).lower()
+        # Optional near-duplicate fact merging before rendering.
+        self.dedup = bool(cfg.get("dedup", False))
+        self.dedup_tau = float(cfg.get("dedup_tau", 0.95))
         # How many utterances to group into one chunk (= the unit of fact
         # extraction + update),
         # same concept as a_mem's turns_per_note. Default 5 to match a_mem so
@@ -608,24 +710,67 @@ class Mem0Memory(Memory):
             for r in candidates
         ]
         bm25_scores = self._compute_bm25_scores(question.text, candidates)
+        # When dedup is on, over-fetch (x3) so that after merging near-dups we
+        # can still fill top_k.
+        rank_top_k = self.top_k * 3 if self.dedup else self.top_k
         ranked = score_and_rank(
             # entity_boosts={} - graph unused
             semantic_results, bm25_scores, {},
-            threshold=self.semantic_threshold, top_k=self.top_k,
+            threshold=self.semantic_threshold, top_k=rank_top_k,
         )
 
-        # Concatenate memory text up to the context_size budget (descending
-        # combined score).
         id_to_rec = {str(r.id): r for r in candidates}
+
+        # Near-duplicate fact merging: walk in ranked order and skip a fact
+        # whose embedding cosine >= dedup_tau against an already-kept fact.
+        if self.dedup:
+            kept: list[tuple[str, float]] = []
+            kept_vecs: list[np.ndarray] = []
+            for sr in ranked:
+                rid = sr["id"]
+                vec = id_to_rec[rid].embedding
+                if any(cos_sim(vec, kv) >= self.dedup_tau for kv in kept_vecs):
+                    continue
+                kept.append((rid, float(sr["score"])))
+                kept_vecs.append(vec)
+                if len(kept) >= self.top_k:
+                    break
+            ranked = [{"id": rid, "score": sc} for rid, sc in kept]
+
+        recs_scores = [
+            (id_to_rec[sr["id"]], float(sr["score"])) for sr in ranked
+        ]
+
+        # Render. 'grouped' lays the facts out grouped by source session (the
+        # paper setting). The grouped renderer is unbudgeted (context_size=0 is
+        # the default), so fall back to the flat budgeted renderer whenever a
+        # token budget is set.
+        if self.fact_render == "grouped" and self.context_size <= 0:
+            rendered, items = _format_grouped(
+                recs_scores, self.group_order, self.group_score_agg
+            )
+        else:
+            rendered, items = self._render_flat_with_budget(recs_scores)
+
+        return RetrievalResult(
+            items=items,
+            rendered=rendered or "No relevant memory!",
+            extra={"route": "MEM0"},
+            metrics=metrics,
+        )
+
+    def _render_flat_with_budget(
+        self, recs_scores: list[tuple["MemoryRecord", float]]
+    ) -> tuple[str, list[Item]]:
+        """Flat renderer: one '- fact' per line in score order, truncated at
+        the context_size token budget (0 = unlimited)."""
         items: list[Item] = []
         rendered = ""
         approx_tokens = self._p_qa_tokens
-        for sr in ranked:
-            rec = id_to_rec[sr["id"]]
+        for rec, sc in recs_scores:
             line = f"- {rec.text}\n"
             tk = count_tokens(line)
-            cs = self.context_size
-            if cs > 0 and approx_tokens + tk > cs:
+            if self.context_size > 0 and approx_tokens + tk > self.context_size:
                 break
             rendered += line
             items.append(
@@ -633,17 +778,11 @@ class Mem0Memory(Memory):
                     text=rec.text,
                     meta={"id": rec.id, "session_idx": rec.session_idx,
                           "date": rec.date},
-                    score=float(sr["score"]),
+                    score=float(sc),
                 )
             )
             approx_tokens += tk
-
-        return RetrievalResult(
-            items=items,
-            rendered=rendered.strip() or "No relevant memory!",
-            extra={"route": "MEM0"},
-            metrics=metrics,
-        )
+        return rendered.strip(), items
 
     def _compute_bm25_scores(
         self, query: str, candidates: list
