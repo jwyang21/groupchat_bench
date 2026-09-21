@@ -10,12 +10,7 @@ Core idea (faithfully ported from the official repo
 
   [offline / commit]
     - Run OpenIE on each session dialogue (= passage) to extract named entities
-      (= phrases) and triples. As in the official repo, this uses **2-call
-      OpenIE**:
-      (1) NER (passage -> named_entities) -> (2) triple extraction
-      (passage + named_entities -> triples), mirroring the official ner.py and
-      triple_extraction.py templates. openie_single_call=True falls back to
-      1-call.
+      (= phrases) and triples in a single LLM call (1-call OpenIE).
     - Add two kinds of nodes to the (undirected) graph:
         * phrase node  (entity-<text>)   - subject/object of a triple
         * passage node (passage-<idx>)   - session dialogue chunk
@@ -90,30 +85,6 @@ class OpenIEResult(BaseModel):
     named_entities: list[str] = Field(
         default_factory=list, description="named entities in the passage"
     )
-    triples: list[list[str]] = Field(
-        default_factory=list,
-        description="list of [subject, predicate, object] triples",
-    )
-
-
-class NERResult(BaseModel):
-    """NER response schema - named entity list (official repo ner.py output
-    format).
-
-    Output of the first OpenIE stage (NER). Its entities feed the second stage
-    (triple extraction).
-    """
-    named_entities: list[str] = Field(
-        default_factory=list, description="named entities in the passage"
-    )
-
-
-class TripleResult(BaseModel):
-    """Triple extraction response schema - triple list (official repo
-    triple_extraction.py output).
-
-    Output of the second OpenIE stage - generated from passage + NER entities.
-    """
     triples: list[list[str]] = Field(
         default_factory=list,
         description="list of [subject, predicate, object] triples",
@@ -300,17 +271,10 @@ class HippoRAG2Memory(Memory):
                                        off/unlimited; >0 = upper bound)
       use_filter             : bool  - use the recognition-memory LLM filter
                                        (default True)
-      openie_single_call     : bool  - if True, 1-call OpenIE (prompt_openie).
-                                       **default True** (this project's
-                                       HippoRAG2 default = 1-call). Only when
-                                       explicitly False, use the official
-                                       2-call (prompt_ner -> prompt_triple).
       question_format        : str   - multi_structured / multi_unstructured /
                                        open_ended
-      prompt_ner/triple      : official 2-call OpenIE prompt filenames (when
-                                       used)
-      prompt_openie          : 1-call OpenIE prompt (only when
-                                       openie_single_call=True)
+      prompt_openie          : 1-call OpenIE prompt filename (entities +
+                                       triples extracted in a single call)
       prompt_filter/qa       : prompt filenames (relative to assets/prompt/)
       hipporag2_snapshot     : str | None - prebuilt graph pickle path
                                        (restored if present)
@@ -346,24 +310,10 @@ class HippoRAG2Memory(Memory):
         # 0/negative = token limit off (unlimited)
         self.context_size = int(cfg.get("context_size", 0))
         self.use_filter = bool(cfg.get("use_filter", True))
-        # HippoRAG2 default = **1-call OpenIE** (hipporag2_openie.txt).
-        #   Always 1-call unless openie_single_call: false is explicitly set.
-        # (The official repo uses NER->triple 2-call, but this project's
-        # default is 1-call.)
-        self.openie_single_call = bool(cfg.get("openie_single_call", True))
 
         # prompts
-        # HippoRAG2 variant = **official (2-call) vs 1-call** only, default =
-        # **always 1-call**.
-        # - 1-call (default): hipporag2_openie.txt extracts entities+triples in
-        # one call (openie_single_call=True).
-        # - official (only when openie_single_call: false): hipporag2_ner.txt
-        # (NER) + hipporag2_triple.txt (triple), 2-call.
-        self._p_ner = load_prompt(cfg.get("prompt_ner", "hipporag2_ner.txt"))
-        self._p_triple = load_prompt(
-            cfg.get("prompt_triple", "hipporag2_triple.txt"))
-        # 1-call OpenIE prompt (project default - used when
-        # openie_single_call=True).
+        # 1-call OpenIE: hipporag2_openie.txt extracts named entities + triples
+        # in a single LLM call.
         self._p_openie = load_prompt(
             cfg.get("prompt_openie", "hipporag2_openie.txt"))
         self._p_filter = load_prompt(
@@ -401,7 +351,7 @@ class HippoRAG2Memory(Memory):
 
         # 1) OpenIE - extract named entities + triples (one LLM call). store
         # unchanged.
-        entities, triples, ie_metrics = self._openie(session.dialogue)
+        entities, triples, ie_metrics = self._openie_single(session.dialogue)
         metrics = metrics.merge(ie_metrics)
 
         # 2) passage embedding - reuse the value injected by data_loader, else
@@ -590,88 +540,10 @@ class HippoRAG2Memory(Memory):
         return metrics
 
     # OpenIE call (structured -> free-form fallback)
-    def _openie(
-        self, passage: str
-    ) -> tuple[list[str], list[list[str]], CallMetrics]:
-        """passage -> (entities, triples, metrics).
-
-        As in the official repo (openie_openai_gpt.py), **2-call OpenIE**:
-          (1) NER (passage -> named_entities)
-          (2) triple extraction (passage + named_entities -> triples)
-        openie_single_call=True falls back to the 1-call path (_openie_single)
-        - an intentional deviation.
-        """
-        if self.openie_single_call:
-            return self._openie_single(passage)
-        metrics = CallMetrics()
-
-        # (1) NER - passage -> named_entities.
-        entities = self._ner(passage, metrics)
-        # (2) triple extraction - passage + named_entities -> triples (entities
-        # injected).
-        triples = self._triple_extraction(passage, entities, metrics)
-        return entities, triples, metrics
-
-    def _ner(self, passage: str, metrics: CallMetrics) -> list[str]:
-        """Official NER call (structured first, free-form on failure). metrics
-        accumulated in place."""
-        prompt = self._p_ner.replace("{passage}", passage)
-        try:
-            parsed, rec = self.llm.generate_structured(prompt, NERResult)
-            if rec is not None:
-                metrics.latency_sec += rec.latency_sec
-                metrics.input_tokens += rec.input_tokens
-                metrics.output_tokens += rec.output_tokens
-                metrics.num_llm_calls += 1
-            if isinstance(parsed, NERResult):
-                return [str(e) for e in parsed.named_entities]
-        except Exception:
-            pass
-        gen = self.llm.generate(prompt)
-        metrics.latency_sec += gen.latency_sec
-        metrics.input_tokens += gen.input_tokens
-        metrics.output_tokens += gen.output_tokens
-        metrics.num_llm_calls += 1
-        return _parse_ner_json(gen.text)
-
-    def _triple_extraction(
-        self, passage: str, entities: list[str], metrics: CallMetrics
-    ) -> list[list[str]]:
-        """Official triple extraction call - passage + named_entities input.
-        metrics accumulated in place."""
-        ent_json = json.dumps([str(e) for e in entities])
-        prompt = self._p_triple.replace("{passage}", passage).replace(
-            "{named_entities}", ent_json
-        )
-        try:
-            parsed, rec = self.llm.generate_structured(prompt, TripleResult)
-            if rec is not None:
-                metrics.latency_sec += rec.latency_sec
-                metrics.input_tokens += rec.input_tokens
-                metrics.output_tokens += rec.output_tokens
-                metrics.num_llm_calls += 1
-            if isinstance(parsed, TripleResult):
-                # enforce len==3 + str elements (prevents node/embedding
-                # pollution from nested list/dict elements).
-                return [
-                    [str(x) for x in t]
-                    for t in parsed.triples
-                    if isinstance(t, list) and len(t) == 3
-                ]
-        except Exception:
-            pass
-        gen = self.llm.generate(prompt)
-        metrics.latency_sec += gen.latency_sec
-        metrics.input_tokens += gen.input_tokens
-        metrics.output_tokens += gen.output_tokens
-        metrics.num_llm_calls += 1
-        return _parse_triple_json(gen.text)
-
     def _openie_single(
         self, passage: str
     ) -> tuple[list[str], list[list[str]], CallMetrics]:
-        """1-call OpenIE (entity+triple in one call). Only when
-        openie_single_call=True.
+        """1-call OpenIE (entities + triples in one call).
 
         structured first, free-form JSON parsing on failure.
         """
@@ -1414,31 +1286,6 @@ def _parse_openie_json(text: str) -> tuple[list[str], list[list[str]]]:
                 if isinstance(t, list) and len(t) == 3:
                     triples.append([str(x) for x in t])
     return entities, triples
-
-
-def _parse_ner_json(text: str) -> list[str]:
-    """Parse the named_entities list from a free-form NER response (official
-    2-call OpenIE stage 1)."""
-    obj = _extract_json_object(text)
-    if obj is None:
-        return []
-    ents = obj.get("named_entities") or obj.get("entities") or []
-    return [str(e) for e in ents] if isinstance(ents, list) else []
-
-
-def _parse_triple_json(text: str) -> list[list[str]]:
-    """Parse [s,p,o] 3-element triples from a free-form triple response
-    (official 2-call OpenIE stage 2)."""
-    obj = _extract_json_object(text)
-    out: list[list[str]] = []
-    if obj is None:
-        return out
-    tris = obj.get("triples") or []
-    if isinstance(tris, list):
-        for t in tris:
-            if isinstance(t, list) and len(t) == 3:
-                out.append([str(x) for x in t])
-    return out
 
 
 def _parse_filter_json(text: str) -> list[list[str]]:

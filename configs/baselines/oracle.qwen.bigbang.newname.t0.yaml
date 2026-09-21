@@ -45,7 +45,6 @@ memory:
   oracle_dialogue_rank: alternating
   prompt_sessions: qa_sessions.txt
   prompt_records: qa_records.txt
-  prompt_no_history: qa_no-history.txt
 run:
   seed: 42
   start_session_idx: 0

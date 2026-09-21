@@ -186,19 +186,18 @@ via the matching `prompt_*` key). QA prompts come in three question-format varia
 | `a_mem_evolution.txt` | A-MEM | Evolve neighboring notes when a new note is linked. |
 | `a_mem_link_judge.txt` | A-MEM | Decide whether two notes should be linked. |
 | `a_mem_query_keywords.txt` | A-MEM | Extract query keywords at retrieval time. |
-| `hipporag2_ner.txt` | HippoRAG 2 | Named-entity recognition. |
-| `hipporag2_triple.txt` | HippoRAG 2 | Triple extraction. |
-| `hipporag2_openie.txt` | HippoRAG 2 | OpenIE extraction. |
+| `a_mem_qa.txt` | A-MEM | Final QA (A-MEM's own QA template). |
+| `hipporag2_openie.txt` | HippoRAG 2 | 1-call OpenIE — extracts entities + triples in a single LLM call (the extraction path). |
 | `hipporag2_filter.txt` | HippoRAG 2 | Filter retrieved facts for relevance. |
-| `hipporag2_qa.txt` | HippoRAG 2 | Final QA. |
-| `mem0_fact_extraction.txt` | Mem0 | Fact extraction (code default). |
-| `mem0_fact_triple_extraction.txt` | Mem0 | Fact extraction in triple form (used by the example Mem0 config). |
+| `hipporag2_qa.txt` | HippoRAG 2 | Final QA (uses the sessions-view QA template). |
+| `mem0_fact_extraction.txt` | Mem0 | Fact extraction (sentence-form facts — the reported setting). |
 | `mem0_update_decision.txt` | Mem0 | Add / update / delete consolidation decision. |
 | `qa_mem0.txt` | Mem0 | Final QA. |
 | `qa_records.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle | QA over relational **records** (triples) only. |
-| `qa_sessions.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, A-MEM, Oracle, Simple RAG | QA over retrieved **sessions** (dialogue) only. |
+| `qa_sessions.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle, Simple RAG | QA over retrieved **sessions** (dialogue) only. |
 | `qa_dual.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle | Dual-view QA over records **and** sessions together. |
-| `qa_no-history.{,multi-unstructured,open-ended}.txt` | Oracle, Simple RAG (Direct QA) | QA from parametric knowledge only (no retrieved context). |
+| `qa_no-history.{,multi-unstructured,open-ended}.txt` | Simple RAG (Direct QA) | QA from parametric knowledge only (no retrieved context). |
+| `record_openie_extraction.txt` | GroupChat-Mem | OpenIE extraction that builds the relational memory $\mathcal{R}$ — turns each (partial) session into `[subject, relation, object]` records (run offline; records are then loaded at QA time). |
 | `query_node_id.txt` | GroupChat-Mem | Identify the single query-relevant node in the record graph. |
 | `query_node_id_select.txt` | GroupChat-Mem | Select the top-k query-relevant nodes. |
 | `qa_traversal_lookup.txt` | GroupChat-Mem | During iterative traversal, decide the next entity to look up. |

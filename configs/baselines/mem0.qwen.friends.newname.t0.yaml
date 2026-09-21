@@ -40,11 +40,10 @@ memory:
   group_order: score          # 'score' (by group relevance) | 'time'
   group_score_agg: max        # group relevance = best-fact score
   dedup: false                # near-duplicate fact merging (off in the paper)
-  prompt_fact_extraction: mem0_fact_triple_extraction.txt
+  prompt_fact_extraction: mem0_fact_extraction.txt
   prompt_update_decision: mem0_update_decision.txt
   prompt_qa: qa_mem0.txt
   snapshot_dir: ./result/baseline_snapshots/newname_t0
-  extract_cache: true
   session_checkpoint: true
   turns_per_batch: 5
 qa:

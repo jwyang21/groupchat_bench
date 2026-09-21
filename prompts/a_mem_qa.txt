@@ -1,0 +1,82 @@
+You are an intelligent language model. Your task is to answer the question based on the provided memory.
+Each memory is formatted as a dialogue.
+
+You will be given a question with five answer choices: (A), (B), (C), (D), and (E). Among these options, only one is correct.
+Additionally, you will be provided with memory.
+
+Below are the requirements you must follow when answering questions.
+
+[REQUIREMENTS]
+- Your output should be a SINGLE option. In other words, your final output must be an element of [(A), (B), (C), (D), (E)]. 
+- For example, if you think '(A) Helen' is the correct answer, you should ONLY output '(A)', neither '(A) Helen' nor 'Helen'.
+- Solve questions based on the provided memory only. Actively use the provided memory to solve the question.
+- You are not allowed to output intermediate processes of how you solved the question.
+- Ensure that the logic leading to your final answer is correct.
+  - 'Logic' refers to entire thought process for arriving at your final answer.
+- Before outputting your final answer, check once again whether your answer is correct. If it is incorrect, revise it accordingly.
+- Avoid outputting '(E)' too readily, as this option indicates you don't know the answer. If there's any information available to solve the question, make full use of it.
+
+Below is an example of solving each question based on the provided memory.
+
+[EXAMPLE]
+- Question:  
+Sophia: Do you remember which company Daniel joined on August 20, 2017?  
+	(A) Amazon  
+	(B) Google  
+	(C) Microsoft  
+	(D) Apple  
+	(E) I don't know. (None of the above)  
+
+- Memory:  
+memory index: 0
+talk start time: August 12, 1996
+memory content:
+Walter: So, any news on the job front, Daniel? I know you've been interviewing lately.
+Daniel: Great news! I just accepted a job offer from Amazon that I received earlier this July.
+Walter: That's amazing! Congratulations! What role are you going to take on?
+Daniel: I'll be joining their team as a senior software engineer. I'm really excited about it.
+Walter says: They're lucky to have you. We should definitely grab dinner to celebrate this weekend!
+memory context: The speakers discuss Daniel's successful job hunt, highlighting his acceptance of a senior software engineer position at Amazon and their plans to celebrate the milestone.
+memory keywords: job offer, Amazon, July, senior software engineer, celebrate
+memory tags: career, friendship, milestone, technology
+
+memory index: 5
+talk start time: November 5, 1997
+memory content:
+Wendy: Hey Daniel, how are things? I haven't seen you since early August.
+Daniel: Really good! I finally started working at the company that offered me a position in July.
+Wendy: Glad to hear it! What was the official start date for the new role?
+Daniel: Today, actually! August 20, 2017 is officially my first day on the job.
+Wendy: Wow, happy first day then! I hope the onboarding process goes smoothly for you.
+memory context: The conversation centers on Daniel sharing a professional life update, specifically confirming his official first day at his new job as August 20, 2017, while Wendy offers encouragement.
+memory keywords: August, start date, first day, onboarding
+memory tags: career, workplace, life update, encouragement
+
+memory index: 2
+talk start time: December 3, 1996
+memory content:
+Kyle: What's new with you, Emma? How was the rest of your summer?
+Emma: I have some exciting news. I started working at Microsoft last week!
+Kyle: Wow, Microsoft! That's a huge accomplishment. Which campus are you based at?
+Emma: I'm working at the main headquarters in Redmond. The campus is absolutely massive.
+Kyle: That sounds incredible. We should catch up soon so you can tell me all about the new team.
+memory context: The main topic is Emma sharing her exciting career achievement of starting a new position at Microsoft's Redmond headquarters, leading to plans for catching up.
+memory keywords: Microsoft, accomplishment, headquarters, Redmond, new team
+memory tags: career, technology, life update, achievement
+
+Memory 0 states that Daniel received and accepted a job offer from Amazon. 
+Memory 5 indicates that Daniel joined the company that offered him a position in July, which, based on the first memory, is Amazon. 
+Memory 2 mentions a name of a company, Microsoft, but it is unrelated to Daniel. 
+Therefore, the correct answer is (A), and your final output should be '(A)'.
+========================================
+Please note that you should output only a SINGLE option from [(A), (B), (C), (D), (E)], without any intermediate steps.
+
+Now, let's solve the question by referring to the memory below:
+
+- Question: 
+{question}
+
+- Memory: 
+{memory}
+
+- Answer:

@@ -43,7 +43,6 @@ memory:
   prompt_filter: hipporag2_filter.txt
   prompt_qa: hipporag2_qa.txt
   snapshot_dir: ./result/baseline_snapshots/newname_t0
-  extract_cache: true
   session_checkpoint: true
 qa:
   answer_budget: 10000        # reasoning-token budget for QA answering

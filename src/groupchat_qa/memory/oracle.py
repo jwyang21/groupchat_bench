@@ -141,9 +141,6 @@ class OracleMemory(Memory):
         self._p_records = load_prompt(
             cfg.get("prompt_records") or "qa_records.txt"
         )
-        self._p_no_hist = load_prompt(
-            cfg.get("prompt_no_history") or "qa_no-history.txt"
-        )
         # For dual mode - same template as GroupChat-Mem's dual prompt
         # ({question}/{triples}/{history}).
         self._p_dual = load_prompt(cfg.get("prompt_dual") or "qa_dual.txt")
