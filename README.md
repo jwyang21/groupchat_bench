@@ -69,14 +69,30 @@ pip install -r requirements.txt
 
 ### 2. Environment Variables
 
-- `OPENAI_API_KEY` - used for the OpenAI embeddings (`text-embedding-3-small`) in retrieval.
-- A local **vLLM** endpoint serving the QA backbone via an OpenAI-compatible API. Set the
-  endpoint's host/port in the config (`llms[].host` / `llms[].port`) or via the
-  `VLLM_HOST` / `VLLM_PORT` placeholders shown in the example configs.
+- `OPENAI_API_KEY` - used for the OpenAI embeddings (`text-embedding-3-small`) in retrieval,
+  and for OpenAI API backbones (e.g. GPT-5.x reasoning models).
+- `GOOGLE_API_KEY` - used for Gemini backbones served through Gemini's OpenAI-compatible
+  endpoint (`provider: openai`, `base_url: .../generativelanguage.../openai/`).
+- A QA backbone. Any of:
+  - a local **vLLM** endpoint (open models) via an OpenAI-compatible API - set the
+    endpoint's host/port in the config (`llms[].host` / `llms[].port`) or via the
+    `VLLM_HOST` / `VLLM_PORT` placeholders in the example configs; or
+  - an **API model** (`provider: openai` with a `base_url`) - e.g. GPT-5.x
+    (`configs/groupchat_mem/groupchat_mem.luna.friends.newname.t0.yaml`) or Gemini
+    (`groupchat_mem.gemini.friends.newname.t0.yaml`). Reasoning models set `top_p: null`
+    and control reasoning via `extra_body.reasoning_effort`.
 
 ```bash
 export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="..."        # only needed for Gemini backbones
 ```
+
+**Cache model / QA model separation.** The memory cache (relational records, query
+nodes, record embeddings) can be loaded from one model while QA is answered by another,
+via `memory.cache_llm_name` (+ `memory.embedding_cache_readonly: true` to never write to
+the source cache). This lets a frontier model answer over an open model's precomputed
+cache without rebuilding it - see
+`configs/groupchat_mem/groupchat_mem.terra_qwencache.friends.newname.t0.yaml`.
 
 ### 3. Run
 

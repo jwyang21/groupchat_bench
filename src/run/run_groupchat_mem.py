@@ -836,8 +836,18 @@ def run_ablation(
                 _no_hist = bool(
                     (cfg_run.get("memory") or {}).get("no_history")
                 )
+                # Cache-model / QA-model separation: memory.cache_llm_name lets
+                # the per-LLM cache (records/query-nodes/record-embeddings) be
+                # loaded from a *different* model than the QA model. When unset,
+                # the cache model is the QA model (llm_name) - the default. Used
+                # to run QA with one model over another model's precomputed
+                # cache. All per-LLM cache loads below use _cache_llm.
+                _cache_llm = (
+                    (cfg_run.get("memory") or {}).get("cache_llm_name")
+                    or llm_name
+                )
                 _bundle_per_llm = None if _no_hist else (
-                    llm_name if per_llm_mode else None
+                    _cache_llm if per_llm_mode else None
                 )
                 bundle = _get_bundle(cfg_data, _bundle_per_llm, _cache_budget)
                 sessions = bundle["sessions"]
@@ -870,7 +880,9 @@ def run_ablation(
                 mem_cfg["dataset_root"] = cfg_data.get("dataset_root")
                 mem_cfg["data_type"] = cfg_data.get("data_type", "normal")
                 mem_cfg["trial"] = int(cfg_data.get("trial", 0))
-                mem_cfg["llm_name"] = llm_name
+                # Use _cache_llm so the record embedding cache path resolves to
+                # the cache model's directory (cache-model / QA-model split).
+                mem_cfg["llm_name"] = _cache_llm
                 mem_cfg["ie_type"] = cfg_data.get("ie_type", "openie")
                 mem_cfg["normalization"] = cfg_data.get("normalization", "raw")
                 mem_cfg["embedder_model"] = method_cfg["embedder"]["model"]
@@ -902,7 +914,7 @@ def run_ablation(
                     dataset_root=cfg_data.get("dataset_root"),
                     data_type=cfg_data.get("data_type", "normal"),
                     trial_idx=int(cfg_data.get("trial", 0)),
-                    llm_name=llm_name,
+                    llm_name=_cache_llm,
                     normalization=cfg_data.get("normalization", "raw"),
                     cache_budget=_cache_budget,
                     num_query_nodes=_K,

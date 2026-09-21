@@ -1,0 +1,75 @@
+# GroupChat-Mem - example config with a Gemini backbone
+# (Friends, New Names, trial 0, Gemini 3.8 Flash).
+#
+# Run:
+#   PYTHONPATH=src python src/run/run_groupchat_mem.py \
+#     --config configs/groupchat_mem/groupchat_mem.gemini.friends.newname.t0.yaml \
+#     --method groupchat_mem --llms gemini-3.8-flash
+#
+# Gemini is served through its OpenAI-compatible endpoint
+# (generativelanguage); authentication uses the GOOGLE_API_KEY env var.
+# OPENAI_API_KEY is required for the OpenAI embeddings used in retrieval.
+
+groupchat_mem:
+  data:
+    dataset_root: ./data/friends      # friends / bigbang / theoffice
+    data_type: newname                # normal / newname (default) / shuffled
+    trial: 0
+    ie_type: openie
+    normalization: raw
+    per_llm_precomputed: true
+    session_filter: all
+
+  embedder:
+    backend: openai
+    model: text-embedding-3-small
+
+  llms:
+    - name: gemini-3.8-flash
+      provider: openai                # Gemini via the OpenAI-compatible API
+      model_name: gemini-3.8-flash
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+      api_key: EMPTY                  # falls back to GOOGLE_API_KEY env
+      temperature: 1.0
+      top_p: null                     # reasoning model: top_p unsupported -> omitted
+      max_tokens: 16384
+      extra_body:
+        reasoning_effort: high        # reasoning models use effort, not a token budget
+      extra_base_urls: []
+
+  memory:
+    name: groupchat_mem
+    num_records: 250                  # k_r: relational records kept from R
+    num_sessions: 40                  # k_s: sessions retrieved from S (half BM25, half embedding)
+    num_query_nodes: 3                # n : top-n query-relevant nodes identified in R
+    hop: 2
+    max_hop: 6
+    session_method: alternating
+    bm25_first: true
+    record_format: record
+    cos_sim_rerank: true
+    record_embedding_type: temporal
+    question_embedding_type: temporal
+    fallback: true
+    context_size: 0                   # 0 = unlimited (serving max-model-len is the real cap)
+    triple_normalization: raw
+    question_format: multi_structured  # multi_structured / multi_unstructured / open_ended
+    cache_budget: 6000
+    delimiter: "========================================"
+
+  grid_combos:
+    - memory.num_records: 250
+      memory.num_sessions: 40
+      memory.num_query_nodes: 3
+
+  qa:
+    answer_budget: 10000
+
+  run:
+    seed: 42
+    start_session_idx: 0
+    end_session_idx: 9999
+    result_dir: ./result/groupchat_mem_gemini/friends/t0
+    log_prompts: true
+    log_prompts_dir: ./log/groupchat_mem/prompts/friends/gemini_t0
+    answer_max_workers: 16

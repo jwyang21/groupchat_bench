@@ -94,7 +94,27 @@ class LLM(ABC):
             HumanMessage(content=user_prompt),
         ]
         t0 = time.perf_counter()
-        response = self._chat.invoke(messages)
+        try:
+            response = self._chat.invoke(messages)
+        except Exception as inv_exc:
+            # A provider may return a response langchain cannot parse - e.g.
+            # Gemini's content filter (PROHIBITED_CONTENT, non-disableable)
+            # returns HTTP 200 with message=None, and langchain then raises
+            # "'NoneType' object has no attribute 'get'". If the provider
+            # implements `_invoke_raw_fallback`, delegate to it to handle such
+            # cases gracefully (blocked prompt -> empty answer, scored as
+            # wrong). Providers without the hook (e.g. vLLM) re-raise, so
+            # existing behavior is unchanged.
+            fb = getattr(self, "_invoke_raw_fallback", None)
+            if fb is None:
+                raise
+            fb_text, fb_in, fb_out = fb(messages, inv_exc)
+            return GenerationRecord(
+                text=str(fb_text),
+                latency_sec=time.perf_counter() - t0,
+                input_tokens=int(fb_in),
+                output_tokens=int(fb_out),
+            )
         latency = time.perf_counter() - t0
         in_tok, out_tok = self._extract_usage(response)
         # Prevent str(None)="None" from leaking when content is None (e.g.

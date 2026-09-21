@@ -75,12 +75,17 @@ def _get_or_create_cache(
     dim: int,
     autoflush_every: int = 50,
     fsync_on_flush: bool = False,
+    read_only: bool = False,
 ) -> "EmbeddingCache":
     """Return a path-keyed singleton EmbeddingCache.
 
     A second (or later) call with the same (path, model_name, dim) returns
     the same instance immediately. Attempting reuse with a different
     (model_name, dim) raises ValueError - a caller bug.
+
+    read_only=True builds the cache in read-only mode (in-memory lookups
+    still work, but the on-disk cache directory is never written). Used when
+    reusing another model's precomputed cache without mutating it.
     """
     key = str(path.resolve())
     with _CACHE_POOL_LOCK:
@@ -100,6 +105,7 @@ def _get_or_create_cache(
             path, model_name, dim,
             autoflush_every=autoflush_every,
             fsync_on_flush=fsync_on_flush,
+            read_only=read_only,
         )
         _CACHE_POOL[key] = instance
         logging.debug(
@@ -661,7 +667,13 @@ class GroupChatMem(Memory):
         # latency
         # (the build script fills the cache in advance, so runtime misses are
         # rare).
-        _kw = dict(autoflush_every=50, fsync_on_flush=False)
+        # embedding_cache_readonly=True (cross-model cache reuse: never write to
+        # the source model's cache directory) -> all caches are opened
+        # read-only, so a miss only embeds in-memory (no delta/flush/compact).
+        _kw = dict(
+            autoflush_every=50, fsync_on_flush=False,
+            read_only=bool(cfg.get("embedding_cache_readonly", False)),
+        )
 
         # Catch specific exceptions only, and emit an explicit warning instead
         # of pass.

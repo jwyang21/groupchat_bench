@@ -132,6 +132,7 @@ class EmbeddingCache:
         flush_every_n_batches: int = 1,
         fsync_on_flush: bool = True,
         compact_threshold: int = _DEFAULT_COMPACT_THRESHOLD,
+        read_only: bool = False,
     ) -> None:
         self.path = Path(path)
         self.model_name = str(model_name)
@@ -154,9 +155,13 @@ class EmbeddingCache:
             "version": 2,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        # flag to block writes on metadata mismatch (permanently preserves the
-        # old cache).
-        self._readonly = False
+        # flag to block on-disk writes. Set to True either explicitly
+        # (read_only=True, e.g. when reusing another model's cache without
+        # mutating its directory) or automatically on a metadata mismatch
+        # (permanently preserves the old cache). In read-only mode the
+        # in-memory map is still populated so repeated lookups do not re-embed;
+        # only disk writes (delta/flush/compact) are skipped.
+        self._readonly = bool(read_only)
         self._load_if_exists()
 
     # path helpers
@@ -453,9 +458,13 @@ class EmbeddingCache:
 
     def set(self, text: str, vec: np.ndarray) -> None:
         """Add the vector in-memory + register it in _dirty. Flush when
-        autoflush_every is reached. No-op if readonly."""
-        if self._readonly:
-            return
+        autoflush_every is reached.
+
+        In read-only mode the vector is still cached in-memory (so repeated
+        lookups for the same text do not re-embed), but no disk write is done
+        (no _dirty/flush/delta/compact) - this preserves the source cache
+        directory untouched when reusing another model's cache.
+        """
         if not isinstance(vec, np.ndarray):
             vec = np.asarray(vec, dtype=np.float32)
         if vec.shape != (self.dim,):
@@ -465,6 +474,8 @@ class EmbeddingCache:
         vec = np.array(vec, dtype=np.float32, copy=True)  # defensive copy.
         with self._lock:
             self._data[text] = vec
+            if self._readonly:
+                return  # in-memory only; skip all disk writes.
             self._dirty[text] = vec
             self._pending += 1
             af = self.autoflush_every

@@ -1,0 +1,74 @@
+# GroupChat-Mem - example config with a frontier OpenAI reasoning backbone
+# (Friends, New Names, trial 0, GPT-5.6 Luna).
+#
+# Run:
+#   PYTHONPATH=src python src/run/run_groupchat_mem.py \
+#     --config configs/groupchat_mem/groupchat_mem.luna.friends.newname.t0.yaml \
+#     --method groupchat_mem --llms gpt-5.6-luna
+#
+# Authentication uses the OPENAI_API_KEY env var. OPENAI_API_KEY is also
+# required for the OpenAI embeddings used in retrieval.
+
+groupchat_mem:
+  data:
+    dataset_root: ./data/friends      # friends / bigbang / theoffice
+    data_type: newname                # normal / newname (default) / shuffled
+    trial: 0
+    ie_type: openie
+    normalization: raw
+    per_llm_precomputed: true
+    session_filter: all
+
+  embedder:
+    backend: openai
+    model: text-embedding-3-small
+
+  llms:
+    - name: gpt-5.6-luna
+      provider: openai
+      model_name: gpt-5.6-luna
+      base_url: <OPENAI_BASE_URL>     # e.g. https://api.openai.com/v1
+      api_key: EMPTY                  # falls back to OPENAI_API_KEY env
+      temperature: 1.0
+      top_p: null                     # reasoning model: top_p unsupported -> omitted
+      max_tokens: 16384
+      extra_body:
+        reasoning_effort: high        # reasoning models use effort, not a token budget
+      extra_base_urls: []
+
+  memory:
+    name: groupchat_mem
+    num_records: 250
+    num_sessions: 40
+    num_query_nodes: 3
+    hop: 2
+    max_hop: 6
+    session_method: alternating
+    bm25_first: true
+    record_format: record
+    cos_sim_rerank: true
+    record_embedding_type: temporal
+    question_embedding_type: temporal
+    fallback: true
+    context_size: 0
+    triple_normalization: raw
+    question_format: multi_structured
+    cache_budget: 6000
+    delimiter: "========================================"
+
+  grid_combos:
+    - memory.num_records: 250
+      memory.num_sessions: 40
+      memory.num_query_nodes: 3
+
+  qa:
+    answer_budget: 10000
+
+  run:
+    seed: 42
+    start_session_idx: 0
+    end_session_idx: 9999
+    result_dir: ./result/groupchat_mem_luna/friends/t0
+    log_prompts: true
+    log_prompts_dir: ./log/groupchat_mem/prompts/friends/luna_t0
+    answer_max_workers: 16

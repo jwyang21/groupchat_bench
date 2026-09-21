@@ -16,7 +16,7 @@ llms:
     host: <VLLM_HOST>
     port: <VLLM_PORT>
     api_key: EMPTY
-    temperature: 1.0   # value actually used for the Direct QA runs (see docs/260914_qwen_config.md)
+    temperature: 1.0   # value actually used for the Direct QA runs
     top_p: 0.95
     max_tokens: 16384
     extra_body:

@@ -221,6 +221,11 @@ def _make_llm_from_cfg(llm_cfg: dict, seed: int | None = None):
     }
     extra = {k: v for k, v in llm_cfg.items() if k not in _known}
 
+    # top_p may be null in config for reasoning models (e.g. gpt-5.x) that
+    # reject top_p; keep None so the client omits it. float(None) would raise.
+    _tp = llm_cfg.get("top_p", 0.95)
+    _top_p = float(_tp) if _tp is not None else None
+
     def _mk(burl: str):
         return make_llm(
             provider=llm_cfg["provider"],
@@ -228,7 +233,7 @@ def _make_llm_from_cfg(llm_cfg: dict, seed: int | None = None):
             base_url=burl,
             api_key=llm_cfg.get("api_key", "EMPTY"),
             temperature=float(llm_cfg.get("temperature", 0.0)),
-            top_p=float(llm_cfg.get("top_p", 0.95)),
+            top_p=_top_p,
             max_tokens=int(llm_cfg.get("max_tokens", 1000)),
             system_prompt=llm_cfg.get(
                 "system_prompt", "You are a helpful assistant."),
