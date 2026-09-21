@@ -174,6 +174,35 @@ The raw GroupChat-Bench data is available in this [link](https://drive.google.co
 Question format is selectable per config via `question_format`
 (`multi_structured` / `multi_unstructured` / `open_ended`).
 
+### Prompts
+
+All prompt templates live in `prompts/`. Each is loaded by name (overridable per config
+via the matching `prompt_*` key). QA prompts come in three question-format variants:
+`*.txt` (multi_structured), `*.multi-unstructured.txt`, `*.open-ended.txt`.
+
+| Prompt(s) | Used by | Purpose |
+|---|---|---|
+| `a_mem_note_construction.txt` | A-MEM | Build a memory note from a session (commit). |
+| `a_mem_evolution.txt` | A-MEM | Evolve neighboring notes when a new note is linked. |
+| `a_mem_link_judge.txt` | A-MEM | Decide whether two notes should be linked. |
+| `a_mem_query_keywords.txt` | A-MEM | Extract query keywords at retrieval time. |
+| `hipporag2_ner.txt` | HippoRAG 2 | Named-entity recognition. |
+| `hipporag2_triple.txt` | HippoRAG 2 | Triple extraction. |
+| `hipporag2_openie.txt` | HippoRAG 2 | OpenIE extraction. |
+| `hipporag2_filter.txt` | HippoRAG 2 | Filter retrieved facts for relevance. |
+| `hipporag2_qa.txt` | HippoRAG 2 | Final QA. |
+| `mem0_fact_extraction.txt` | Mem0 | Fact extraction (code default). |
+| `mem0_fact_triple_extraction.txt` | Mem0 | Fact extraction in triple form (used by the example Mem0 config). |
+| `mem0_update_decision.txt` | Mem0 | Add / update / delete consolidation decision. |
+| `qa_mem0.txt` | Mem0 | Final QA. |
+| `qa_records.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle | QA over relational **records** (triples) only. |
+| `qa_sessions.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, A-MEM, Oracle, Simple RAG | QA over retrieved **sessions** (dialogue) only. |
+| `qa_dual.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle | Dual-view QA over records **and** sessions together. |
+| `qa_no-history.{,multi-unstructured,open-ended}.txt` | Oracle, Simple RAG (Direct QA) | QA from parametric knowledge only (no retrieved context). |
+| `query_node_id.txt` | GroupChat-Mem | Identify the single query-relevant node in the record graph. |
+| `query_node_id_select.txt` | GroupChat-Mem | Select the top-k query-relevant nodes. |
+| `qa_traversal_lookup.txt` | GroupChat-Mem | During iterative traversal, decide the next entity to look up. |
+
 * * *
 
 ## Results
