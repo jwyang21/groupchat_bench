@@ -87,6 +87,18 @@ export OPENAI_API_KEY="sk-..."
 export GOOGLE_API_KEY="..."        # only needed for Gemini backbones
 ```
 
+**OpenAI-compatible gateway (optional).** The OpenAI path (embeddings + OpenAI API
+backbones) can be routed through an OpenAI-compatible AI gateway instead of calling
+OpenAI directly, via the `GROUPCHAT_API_MODE` environment variable. `openai` (default)
+keeps the official OpenAI endpoint unchanged; `letsur` routes OpenAI-default requests to
+the gateway (`https://gw.letsur.ai/v1`) using `LETSUR_API_KEY`. Model ids are identical
+codes (no mapping), and vLLM / Gemini / any explicitly-set endpoint are never rerouted.
+
+```bash
+export GROUPCHAT_API_MODE="letsur"   # default "openai"; "letsur" uses the gateway below
+export LETSUR_API_KEY="..."          # only needed when GROUPCHAT_API_MODE=letsur
+```
+
 **Cache model / QA model separation.** The memory cache (relational records, query
 nodes, record embeddings) can be loaded from one model while QA is answered by another,
 via `memory.cache_llm_name` (+ `memory.embedding_cache_readonly: true` to never write to
@@ -103,6 +115,12 @@ PYTHONPATH=src python src/run/run_groupchat_mem.py \
   --config configs/groupchat_mem/groupchat_mem.qwen.friends.newname.t0.yaml \
   --method groupchat_mem --llms qwen3.5-35b-a3b-on
 ```
+
+Larger open backbones have ready example configs too: `groupchat_mem.qwen122b.*`
+(Qwen3.5-122B-A10B) and `groupchat_mem.gptoss120b.*` (GPT-OSS-120B). GPT-OSS is a
+reasoning-effort model (no `thinking_token_budget`), so its config uses `top_p: 1.0`
+and `extra_body.chat_template_kwargs.reasoning_effort: high`; swap `--llms` to match
+the config's model name (`qwen3.5-122b-a10b` / `gpt-oss-120b`).
 
 **A baseline (e.g. HippoRAG 2):**
 

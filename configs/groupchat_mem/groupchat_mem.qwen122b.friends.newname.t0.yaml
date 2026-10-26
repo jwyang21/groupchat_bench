@@ -1,0 +1,84 @@
+# GroupChat-Mem - example config (Friends, New Names, trial 0, Qwen3.5-122B-A10B backbone).
+#
+# Same as groupchat_mem.qwen.friends.newname.t0.yaml but with the larger
+# Qwen3.5-122B-A10B backbone (identical sampling / thinking settings - only the
+# served model name differs). The served-model-name of your vLLM process must
+# match `model_name` below.
+#
+# Run:
+#   PYTHONPATH=src python src/run/run_groupchat_mem.py \
+#     --config configs/groupchat_mem/groupchat_mem.qwen122b.friends.newname.t0.yaml \
+#     --method groupchat_mem --llms qwen3.5-122b-a10b
+#
+# Set the vLLM endpoint via <VLLM_HOST>/<VLLM_PORT>. OPENAI_API_KEY is required for
+# the OpenAI embeddings used in retrieval.
+
+groupchat_mem:
+  data:
+    dataset_root: ./data/friends      # shows: friends / bigbang / theoffice
+    data_type: newname                # normal / newname (default) / shuffled
+    trial: 0
+    ie_type: openie
+    normalization: raw
+    per_llm_precomputed: true
+    session_filter: all
+
+  embedder:
+    backend: openai
+    model: text-embedding-3-small
+
+  llms:
+    - name: qwen3.5-122b-a10b
+      provider: vllm
+      model_name: qwen3.5-122b-a10b
+      host: <VLLM_HOST>               # e.g. localhost or your vLLM server IP
+      port: <VLLM_PORT>               # e.g. 8000
+      api_key: EMPTY
+      temperature: 1.0                # value actually used for GroupChat-Mem / retrieval runs
+      top_p: 0.95
+      max_tokens: 16384
+      extra_body:
+        top_k: 20
+        min_p: 0.0
+        chat_template_kwargs:
+          enable_thinking: true
+        thinking_token_budget: 10000  # reasoning-token budget for QA (Table 9)
+      extra_base_urls: []             # optional: extra vLLM endpoints for load-balancing
+
+  memory:
+    name: groupchat_mem
+    # --- Dual-view retrieval (paper Table 5) ---
+    num_records: 250                   # k_r: relational records kept from R
+    num_sessions: 40                 # k_s: sessions retrieved from S (half BM25, half embedding)
+    num_query_nodes: 3                # n : top-n query-relevant nodes identified in R
+    hop: 2                            # two-hop neighborhood around each query node
+    max_hop: 6                        # maximum traversal hop limit
+    session_method: alternating       # S ranking: half BM25 + half embedding cosine
+    bm25_first: true
+    record_format: record
+    cos_sim_rerank: true              # rank R records by cosine similarity to the query
+    record_embedding_type: temporal
+    question_embedding_type: temporal
+    fallback: true                    # enable the iterative traversal when the initial answer is (E)
+    context_size: 0                   # 0 = unlimited (serving max-model-len is the real cap)
+    triple_normalization: raw
+    question_format: multi_structured  # multi_structured / multi_unstructured / open_ended
+    cache_budget: 6000
+    delimiter: "========================================"
+
+  grid_combos:
+    - memory.num_records: 250
+      memory.num_sessions: 40
+      memory.num_query_nodes: 3
+
+  qa:
+    answer_budget: 10000
+
+  run:
+    seed: 42
+    start_session_idx: 0
+    end_session_idx: 9999
+    result_dir: ./result/groupchat_mem/friends/t0
+    log_prompts: true
+    log_prompts_dir: ./log/groupchat_mem/prompts/friends/qwen122b_t0
+    answer_max_workers: 16

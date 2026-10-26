@@ -55,6 +55,22 @@ class OpenAIClient(LLM):
         _burl = str(kwargs.get("base_url", "") or "")
         if self.seed is not None and "generativelanguage" not in _burl:
             params["seed"] = self.seed
+        # OpenAI-direct vs AI-gateway toggle (GROUPCHAT_API_MODE=openai|letsur).
+        # In letsur mode, and only when base_url is the OpenAI default
+        # (empty / api.openai.com), substitute the gateway (base_url =
+        # gw.letsur.ai/v1 + LETSUR_API_KEY). vLLM (localhost), Gemini
+        # (generativelanguage) and explicit endpoints are untouched. Model
+        # names are identical codes, so no mapping is needed (pass-through).
+        # The seed / gemini checks above used the original base_url, so routing
+        # here does not affect them.
+        from .api_mode import resolve_openai_credentials
+        _lb, _lk = resolve_openai_credentials(
+            kwargs.get("base_url"), kwargs.get("api_key")
+        )
+        if _lb is not None:
+            kwargs["base_url"] = _lb
+        if _lk is not None:
+            kwargs["api_key"] = _lk
         # Any extra provider params (e.g. extra_body={"reasoning_effort": ...}
         # for reasoning models) flow through kwargs unchanged.
         return ChatOpenAI(**params, **kwargs)
@@ -97,6 +113,11 @@ class OpenAIClient(LLM):
                 os.getenv("GOOGLE_API_KEY")
                 if "generativelanguage" in burl else None
             ) or os.getenv("OPENAI_API_KEY")
+        # AI-gateway toggle (same rule as _make_chat_model): in letsur mode with
+        # an OpenAI-default base_url, route to the gateway (base_url +
+        # LETSUR_API_KEY). gemini / vLLM / explicit endpoints are untouched.
+        from .api_mode import resolve_openai_credentials
+        burl, ak = resolve_openai_credentials(burl or None, ak)
         client = _openai.OpenAI(base_url=(burl or None), api_key=ak)
 
         # langchain messages (SystemMessage/HumanMessage) -> OpenAI chat dicts.

@@ -25,21 +25,42 @@ class OpenAIEmbedder(Embedder):
     }
 
     def __init__(self, model: str = "text-embedding-3-small") -> None:
-        # If OPENAI_API_KEY is unset, the client is created silently and fails
-        # with an opaque 401 on
-        # the first embed call, aborting mid-ablation. Validate up front to
-        # fail fast.
+        # If the key is unset, the client is created silently and fails with an
+        # opaque 401 on the first embed call, aborting mid-ablation. Validate up
+        # front to fail fast.
+        # OpenAI-direct vs AI-gateway toggle (GROUPCHAT_API_MODE): in letsur mode
+        # route to the gateway (base_url = gw.letsur.ai/v1 + LETSUR_API_KEY); the
+        # embedding model id (text-embedding-3-small) is the same code.
         import os
-        if not os.environ.get("OPENAI_API_KEY"):
+        from ..client.api_mode import is_letsur, resolve_openai_credentials
+        if is_letsur():
+            if not os.environ.get("LETSUR_API_KEY"):
+                raise RuntimeError(
+                    "LETSUR_API_KEY environment variable is not set "
+                    "(GROUPCHAT_API_MODE=letsur). Put the key in a .env file "
+                    "(LETSUR_API_KEY=...) or export it, then retry."
+                )
+        elif not os.environ.get("OPENAI_API_KEY"):
             raise RuntimeError(
                 "OPENAI_API_KEY environment variable is not set. Put the "
                 "key in a .env file or export it, then retry. (Check that "
                 "load_project_env() was called.)"
             )
         self.model = model
+        # base_url=None (OpenAI default) input -> openai mode keeps
+        # (None, OPENAI_API_KEY) unchanged; letsur mode substitutes
+        # (gw.letsur.ai/v1, LETSUR_API_KEY).
+        base_url, api_key = resolve_openai_credentials(
+            None, os.environ.get("OPENAI_API_KEY")
+        )
         from langchain_openai import OpenAIEmbeddings
 
-        self._client = OpenAIEmbeddings(model=model)
+        _emb_kwargs: dict = {}
+        if base_url:
+            _emb_kwargs["base_url"] = base_url
+        if api_key:
+            _emb_kwargs["api_key"] = api_key
+        self._client = OpenAIEmbeddings(model=model, **_emb_kwargs)
 
     @property
     def name(self) -> str:
