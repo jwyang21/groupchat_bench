@@ -1,8 +1,12 @@
-# Example config: Oracle upper bound (perfect retrieval + routing). BigBang, newname, trial 0, Qwen.
-# Single-phase QA run via src/run/run_baseline.py.
+# Example config: Oracle (Sessions + Records) upper bound. Friends, newname,
+# trial 0, Qwen. Injects BOTH the verbatim oracle sessions and the ground-truth
+# records of each question's answer sessions (qa_dual.txt).
+# Run: PYTHONPATH=src python src/run/run_baseline.py \
+#   --config configs/baselines/oracle.qwen.friends.newname.t0.yaml \
+#   --llms qwen3.5-35b-a3b-on
 
 data:
-  dataset_root: ./data/bigbang
+  dataset_root: ./data/friends
   data_type: newname
   trial: 0
   ie_type: openie
@@ -33,18 +37,20 @@ embedder:
   cache: true
 memory:
   name: oracle
-  oracle_dialogue_only: true
+  oracle_dual: true
+  oracle_record_llm: gt   # ground-truth records (required for record variants)
+  oracle_dialogue_rank: time_ordered
+  fallback: false
   question_format: multi_structured
   context_size: 0
-  fallback: true
-  num_records: 250
-  num_sessions: 40
+  num_records: 0          # 0 = no truncation (all oracle evidence)
+  num_sessions: 0
   record_format: record
   normalization: raw
   delimiter: ========================================
-  oracle_dialogue_rank: alternating
   prompt_sessions: qa_sessions.txt
   prompt_records: qa_records.txt
+  prompt_dual: qa_dual.txt
 run:
   seed: 42
   start_session_idx: 0
@@ -52,7 +58,7 @@ run:
   session_filter: all
   commit_only: false
   log_prompts: true
-  log_prompts_dir: log/oracle/prompts/bigbang.newname.t0.qwen3.5-35b-a3b-on
+  log_prompts_dir: log/oracle/prompts/friends.newname.t0.qwen3.5-35b-a3b-on
   answer_max_workers: 16
   result_save_every: 300
 qa:

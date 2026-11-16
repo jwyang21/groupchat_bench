@@ -39,7 +39,7 @@ baseline_snapshots/
 *embeddings*.npz
 *embeddings*.npy
 
-# --- OS / editor ---
+# --- OS / editor / tooling ---
 .DS_Store
 Thumbs.db
 .idea/

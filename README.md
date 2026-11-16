@@ -88,15 +88,17 @@ export GOOGLE_API_KEY="..."        # only needed for Gemini backbones
 ```
 
 **OpenAI-compatible gateway (optional).** The OpenAI path (embeddings + OpenAI API
-backbones) can be routed through an OpenAI-compatible AI gateway instead of calling
+backbones) can be routed through any OpenAI-compatible gateway instead of calling
 OpenAI directly, via the `GROUPCHAT_API_MODE` environment variable. `openai` (default)
-keeps the official OpenAI endpoint unchanged; `letsur` routes OpenAI-default requests to
-the gateway (`https://gw.letsur.ai/v1`) using `LETSUR_API_KEY`. Model ids are identical
-codes (no mapping), and vLLM / Gemini / any explicitly-set endpoint are never rerouted.
+keeps the official OpenAI endpoint unchanged; `gateway` routes OpenAI-default requests to
+`GATEWAY_BASE_URL` using `GATEWAY_API_KEY`. Model ids are passed through unchanged
+(the gateway must expose the same ids), and vLLM / Gemini / any explicitly-set endpoint
+are never rerouted.
 
 ```bash
-export GROUPCHAT_API_MODE="letsur"   # default "openai"; "letsur" uses the gateway below
-export LETSUR_API_KEY="..."          # only needed when GROUPCHAT_API_MODE=letsur
+export GROUPCHAT_API_MODE="gateway"              # default "openai"
+export GATEWAY_BASE_URL="https://<gateway>/v1"   # only needed in gateway mode
+export GATEWAY_API_KEY="..."                     # only needed in gateway mode
 ```
 
 **Cache model / QA model separation.** The memory cache (relational records, query
@@ -187,7 +189,7 @@ The raw GroupChat-Bench data is available in this [link](https://drive.google.co
 | **HippoRAG 2** | OpenIE-based relational fact store + Personalized PageRank retrieval. |
 | **Mem0** | Fact extraction with add/update/delete consolidation, dense retrieval. |
 | **A-MEM** | Interlinked memory notes with dynamic linking and evolution. |
-| **Oracle** | Upper bound with perfect retrieval and routing. |
+| **Oracle** | Upper bound that injects the answer sessions' evidence directly: Sessions (`oracle_sessions_only.*`), Records (`oracle_records_only.*`, ground-truth records), or Sessions + Records (`oracle.*`). |
 
 Question format is selectable per config via `question_format`
 (`multi_structured` / `multi_unstructured` / `open_ended`).

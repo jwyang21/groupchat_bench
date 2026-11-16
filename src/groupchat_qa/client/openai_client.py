@@ -55,10 +55,10 @@ class OpenAIClient(LLM):
         _burl = str(kwargs.get("base_url", "") or "")
         if self.seed is not None and "generativelanguage" not in _burl:
             params["seed"] = self.seed
-        # OpenAI-direct vs AI-gateway toggle (GROUPCHAT_API_MODE=openai|letsur).
-        # In letsur mode, and only when base_url is the OpenAI default
-        # (empty / api.openai.com), substitute the gateway (base_url =
-        # gw.letsur.ai/v1 + LETSUR_API_KEY). vLLM (localhost), Gemini
+        # OpenAI-direct vs gateway toggle (GROUPCHAT_API_MODE=openai|gateway).
+        # In gateway mode, and only when base_url is the OpenAI default
+        # (empty / api.openai.com), substitute the gateway (GATEWAY_BASE_URL
+        # + GATEWAY_API_KEY). vLLM (localhost), Gemini
         # (generativelanguage) and explicit endpoints are untouched. Model
         # names are identical codes, so no mapping is needed (pass-through).
         # The seed / gemini checks above used the original base_url, so routing
@@ -113,9 +113,9 @@ class OpenAIClient(LLM):
                 os.getenv("GOOGLE_API_KEY")
                 if "generativelanguage" in burl else None
             ) or os.getenv("OPENAI_API_KEY")
-        # AI-gateway toggle (same rule as _make_chat_model): in letsur mode with
-        # an OpenAI-default base_url, route to the gateway (base_url +
-        # LETSUR_API_KEY). gemini / vLLM / explicit endpoints are untouched.
+        # Gateway toggle (same rule as _make_chat_model): in gateway mode with
+        # an OpenAI-default base_url, route to GATEWAY_BASE_URL +
+        # GATEWAY_API_KEY. gemini / vLLM / explicit endpoints are untouched.
         from .api_mode import resolve_openai_credentials
         burl, ak = resolve_openai_credentials(burl or None, ak)
         client = _openai.OpenAI(base_url=(burl or None), api_key=ak)
@@ -137,7 +137,8 @@ class OpenAIClient(LLM):
         )
         if self.top_p is not None:
             params["top_p"] = self.top_p
-        # Pass extra_body (e.g. reasoning_effort) exactly as the chat model does.
+        # Pass extra_body (e.g. reasoning_effort) exactly as the chat model
+        # does.
         eb = kwargs.get("extra_body")
         if isinstance(eb, dict) and eb:
             params["extra_body"] = dict(eb)

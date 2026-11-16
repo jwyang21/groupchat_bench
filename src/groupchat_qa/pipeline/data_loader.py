@@ -147,8 +147,25 @@ def load_query_node_cache(
             continue  # corrupt file -> try the next candidate
         if not isinstance(raw, dict):
             continue
+        # Optional sidecar `<name>_attempted.json` lists the indices whose
+        # identification call succeeded. An empty entry that is NOT in it is
+        # a failed (e.g. timed-out) call, not a genuine "no node" answer:
+        # drop it so the runtime falls back to live identification instead
+        # of silently using an empty node list.
+        attempted: set[str] | None = None
+        att_path = p.with_name(p.stem + "_attempted.json")
+        if att_path.exists():
+            try:
+                att_raw = json.loads(
+                    local_first(att_path).read_text(encoding="utf-8"))
+                attempted = {str(a) for a in att_raw}
+            except Exception:
+                attempted = None
         out: dict[int, list] = {}
         for k, v in raw.items():
+            if (attempted is not None and not v
+                    and str(k) not in attempted):
+                continue
             try:
                 out[int(k)] = v
             except (ValueError, TypeError):

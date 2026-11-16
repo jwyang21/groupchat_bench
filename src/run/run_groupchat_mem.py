@@ -836,10 +836,11 @@ def run_ablation(
                 _no_hist = bool(
                     (cfg_run.get("memory") or {}).get("no_history")
                 )
-                # Cache-model / QA-model separation: memory.cache_llm_name lets
-                # the per-LLM cache (records/query-nodes/record-embeddings) be
-                # loaded from a *different* model than the QA model. When unset,
-                # the cache model is the QA model (llm_name) - the default. Used
+                # Cache-model / QA-model separation: memory.cache_llm_name
+                # lets the per-LLM cache (records/query-nodes/record
+                # embeddings) be loaded from a *different* model than the QA
+                # model. When unset, the cache model is the QA model
+                # (llm_name) - the default. Used
                 # to run QA with one model over another model's precomputed
                 # cache. All per-LLM cache loads below use _cache_llm.
                 _cache_llm = (

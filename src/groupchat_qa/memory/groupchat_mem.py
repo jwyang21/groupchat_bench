@@ -667,8 +667,8 @@ class GroupChatMem(Memory):
         # latency
         # (the build script fills the cache in advance, so runtime misses are
         # rare).
-        # embedding_cache_readonly=True (cross-model cache reuse: never write to
-        # the source model's cache directory) -> all caches are opened
+        # embedding_cache_readonly=True (cross-model cache reuse: never write
+        # to the source model's cache directory) -> all caches are opened
         # read-only, so a miss only embeds in-memory (no delta/flush/compact).
         _kw = dict(
             autoflush_every=50, fsync_on_flush=False,

@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -163,6 +164,18 @@ class OracleMemory(Memory):
         # (dialogue is LLM-independent, one file, so unchanged). If unset, use
         #   llm_name (fully preserving the original oracle behavior).
         record_llm = cfg.get("oracle_record_llm") or llm_name
+        # Record-injecting variants (dual / records_only) must use the GT
+        # records: a QA model's own OpenIE records over-inject evidence on
+        # shows with many sessions per answer date and inflate the ceiling.
+        # dialogue_only does not read records, so it is unaffected.
+        if (self.dual or self.records_only) and record_llm != "gt":
+            warnings.warn(
+                f"[oracle] dual={self.dual}/records_only={self.records_only} "
+                f"with oracle_record_llm={record_llm!r}; forcing the GT "
+                "record bundle ('gt'). Set oracle_record_llm: gt explicitly.",
+                stacklevel=2,
+            )
+            record_llm = "gt"
         norm = cfg.get("normalization", "raw")
         if not (ds_root and dt and trial is not None and llm_name):
             raise ValueError(

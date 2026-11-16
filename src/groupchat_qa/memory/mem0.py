@@ -201,7 +201,9 @@ def _group_score(scores: list[float], agg: str) -> float:
         s = sorted(scores)
         n = len(s)
         mid = n // 2
-        return float(s[mid]) if n % 2 == 1 else float((s[mid - 1] + s[mid]) / 2.0)
+        if n % 2 == 1:
+            return float(s[mid])
+        return float((s[mid - 1] + s[mid]) / 2.0)
     if agg == "min":
         return float(min(scores))
     return float(max(scores))  # "max" (default / fallback)
@@ -245,7 +247,10 @@ def _format_grouped(
     items: list[Item] = []
     for key in group_keys:
         idx, date = key
-        header = f"[Date: {date} (Session {idx})]" if date else f"[Session {idx}]"
+        if date:
+            header = f"[Date: {date} (Session {idx})]"
+        else:
+            header = f"[Session {idx}]"
         lines.append(header)
         for rec, sc in groups[key]:
             lines.append(f"- {rec.text}")
@@ -770,7 +775,8 @@ class Mem0Memory(Memory):
         for rec, sc in recs_scores:
             line = f"- {rec.text}\n"
             tk = count_tokens(line)
-            if self.context_size > 0 and approx_tokens + tk > self.context_size:
+            if (self.context_size > 0
+                    and approx_tokens + tk > self.context_size):
                 break
             rendered += line
             items.append(
