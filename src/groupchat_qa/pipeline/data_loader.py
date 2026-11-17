@@ -110,7 +110,7 @@ def query_node_filename(
 
     None -> original behavior (`query_node_{norm}.json`). int ->
     `query_node_{norm}_nq{K}.json`. Must be **exactly identical** to the save
-    file name in the query-node precompute step (read/write paths in sync).
+    file name in the query-node precompute step (preprocess/step3_build_query_nodes.py) (read/write paths in sync).
     """
     if num_query_nodes is not None:
         return f"query_node_{normalization}_nq{int(num_query_nodes)}.json"
@@ -348,7 +348,7 @@ def load_per_llm_precomputed(
     Path convention (raw/en suffix separated; budget branch via bNNNNN):
         {dataset_root}/{data_type}/precomputed/per-trial/t{N}/per-llm/
             {llm_name}/[bNNNNN/]
-            route.json           # {idx: "RAG"|"R"} (required)
+            route.json           # {idx: "RAG"|"R"} (optional, unused)
             query_node.json      # {idx: [candidate,...]} (optional)
             {ie_type}/           # openie / closedie / gt
                 # raw or en (required):
@@ -459,12 +459,8 @@ def load_per_llm_precomputed(
     else:
         partial_path = p_named
 
-    if not route_path.exists() and not list(base.glob("route_split_*.json")):
-        raise FileNotFoundError(
-            f"per-LLM precomputed route missing: {route_path}\n"
-            "  -> cache miss under the assistant==QA policy. Run per-LLM "
-            f"precompute (`--llms {llm_name}`) first, then retry."
-        )
+    # route.json is optional: it is a legacy question-routing label that is only
+    # logged and never consumed by any memory method. Absent -> empty dict.
     _partial_split_glob = (
         f"partial_session_records_{normalization}_split_*.json"
     )
@@ -473,9 +469,8 @@ def load_per_llm_precomputed(
     ):
         raise FileNotFoundError(
             f"per-LLM precomputed partial records missing: {partial_path}\n"
-            "  -> cache miss under the assistant==QA policy. Run per-LLM "
-            "precompute "
-            f"(`--llms {llm_name} --ie-types {ie_type}`) first, then retry.\n"
+            "  -> run preprocess/step2_extract_records.py "
+            f"(`--llm {llm_name}`) first, or download the processed data, then retry.\n"
             f"  -> if normalization={normalization!r} is needed, the en file "
             "generation step must also be included."
         )
@@ -492,7 +487,7 @@ def load_per_llm_precomputed(
     else:
         route = _load_split_route(base) or {}
 
-    # query node load (produced by the query-node precompute step, optional -
+    # query node load (produced by the query-node precompute step (preprocess/step3_build_query_nodes.py), optional -
     # if absent, an empty
     # dict -> the ablation runtime live-computes only those idx as a fallback;
     # the result is
@@ -501,7 +496,7 @@ def load_per_llm_precomputed(
     #   entity list.
     # query nodes depend on records (raw/en) -> loaded per normalization (same
     # convention as the
-    # query-node precompute step). route (above)/question/embedding are
+    # query-node precompute step (preprocess/step3_build_query_nodes.py)). route (above)/question/embedding are
     # normalization-independent
     # and shared. query nodes can be split per K (num_query_nodes) with
     # `_nq{K}` -> use
@@ -527,7 +522,7 @@ def load_per_llm_precomputed(
     # entire records are trial-independent -> read from the common path.
     # (entire records = datasetxdata_typexLLM, trial-independent. Match the
     # save path in
-    # per_llm_precompute.py (common/{ie}/{llm}/) - write/read paths in sync.)
+    # preprocess/step2_extract_records.py (common/{ie}/{llm}/) - write/read paths in sync.)
     # The budget segment sits directly under the LLM folder (same convention as
     # per-llm).
     common_ie_dir = _apply_budget(
@@ -729,7 +724,7 @@ def load_converted_dataset(
 
     # Triple / route : per_llm_name branch
     per_llm_route: dict[int, str] | None = None
-    # produced by the query-node precompute step (filled only in per_llm mode)
+    # produced by the query-node precompute step (preprocess/step3_build_query_nodes.py) (filled only in per_llm mode)
     per_llm_query_nodes: dict[int, list] = {}
     if per_llm_name is not None:
         # v1_3+ assistant==QA policy - the ie_type subdir is also branched

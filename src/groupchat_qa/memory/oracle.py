@@ -10,7 +10,7 @@ Registered in the factory under `name == "oracle"`. QA prompt assembly reuses
 the **same** templates and render functions as GroupChat-Mem to match prompt
 format (same format + oracle evidence = a fair ceiling).
 
-Oracle bundle structure (build_oracle.py):
+Oracle bundle structure (preprocess/step5_build_oracle.py):
   - dialogue bundle (LLM-independent):
         {root}/{dt}/oracle/trial{N}.oracle.dialogue.json
         list[entry], entry = {session_idx, question, questioner, q_kind,
@@ -33,7 +33,7 @@ the true ceiling.
   If fallback=True and the first answer is (E), try once more with the opposite
   modality (matches GroupChat-Mem's (E)-fallback).
 
-Ordering: build_oracle already sorts (dialogue=alternating, records=cosine) ->
+Ordering: step5_build_oracle already sorts (dialogue=alternating, records=cosine) ->
 used **as-is without re-sorting**. "use all as evidence" (context_size off =
 unlimited). raw normalization.
 
@@ -76,7 +76,7 @@ LOGGER = logging.getLogger(__name__)
 def _entry_key(session_idx: Any, question: Any) -> tuple:
     """lookup key - (session, question text).
 
-    questioner is excluded from the key: build_oracle's provenance questioner
+    questioner is excluded from the key: step5_build_oracle's provenance questioner
     uses the **normal name** (e.g. 'Phoebe'), while a newname/shuffled run's
     Question.questioner uses the **perturbed name** (e.g. 'Jennifer'), so they
     mismatch (question text and evidence still match under perturbation).
@@ -129,7 +129,7 @@ class OracleMemory(Memory):
         # records=250, sessions=40.
         self.k_records = int(cfg.get("num_records", 250) or 0)
         self.k_sessions = int(cfg.get("num_sessions", 40) or 0)
-        # dialogue ordering choice - build_oracle policy defaults to
+        # dialogue ordering choice - step5_build_oracle policy defaults to
         # alternating.
         self.dialogue_rank = str(
             cfg.get("oracle_dialogue_rank", "alternating")
@@ -193,12 +193,12 @@ class OracleMemory(Memory):
         if not dlg_path.exists():
             raise FileNotFoundError(
                 f"[oracle] dialogue bundle not found: {dlg_path} "
-                f"(run build_oracle.py first)"
+                f"(run preprocess/step5_build_oracle.py first)"
             )
         if not self.dialogue_only and not record_path.exists():
             raise FileNotFoundError(
                 f"[oracle] record bundle not found: {record_path} "
-                f"(run build_oracle.py first)"
+                f"(run preprocess/step5_build_oracle.py first)"
             )
 
         with open(dlg_path, encoding="utf-8") as f:
@@ -232,7 +232,7 @@ class OracleMemory(Memory):
         )
 
     def _pick_dialogues(self, entry: dict) -> list:
-        """Select the dialogue list build_oracle pre-sorted (no re-sorting)."""
+        """Select the dialogue list step5_build_oracle pre-sorted (no re-sorting)."""
         # oracle experiment default = time-ordered accumulation (no ranking).
         if self.dialogue_rank in (
             "time_ordered", "time", "session_order", "accumulated"

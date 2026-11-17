@@ -57,9 +57,39 @@ timepoint so information from future sessions never leaks into a past question.
 
 * * *
 
-## Quick Starts
+## Quick Start
 
-### 1. Installation
+The whole pipeline in four steps. Each step is explained in detail in the sections below.
+
+```bash
+# 1. install
+git clone https://github.com/jwyang21/groupchat_bench.git
+cd groupchat_bench
+python -m venv .venv && source .venv/bin/activate        # Python >= 3.10
+pip install -r requirements.txt
+
+# 2. get the ready-to-run data (creates ./data/)
+#    download groupchat_bench_processed.zip from the link in "Download the Data" below
+unzip groupchat_bench_processed.zip
+
+# 3. keys + a QA backbone (here: a local vLLM server, run it in a separate terminal)
+export OPENAI_API_KEY="sk-..."                           # embeddings
+vllm serve Qwen/Qwen3.5-35B-A3B --served-model-name qwen3.5-35b-a3b-on --port 8000 \
+  --max-model-len 65536 \
+  --reasoning-parser qwen3 \
+  --reasoning-config '{"reasoning_start_str":"<think>","reasoning_end_str":"</think>"}'
+sed -i 's/<VLLM_HOST>/localhost/; s/<VLLM_PORT>/8000/' \
+  configs/groupchat_mem/groupchat_mem.qwen.friends.newname.t0.yaml
+
+# 4. run GroupChat-Mem on Friends / New Names / trial 0
+PYTHONPATH=src python src/run/run_groupchat_mem.py \
+  --config configs/groupchat_mem/groupchat_mem.qwen.friends.newname.t0.yaml \
+  --method groupchat_mem --llms qwen3.5-35b-a3b-on
+```
+
+* * *
+
+## 1. Installation
 
 ```bash
 git clone https://github.com/jwyang21/groupchat_bench.git
@@ -68,51 +98,200 @@ python -m venv .venv && source .venv/bin/activate   # Python >= 3.10
 pip install -r requirements.txt
 ```
 
-### 2. Download the Data
+`requirements.txt` covers both the experiments and the preprocessing scripts. A vLLM
+installation is only needed on the machine that serves open models.
 
-The GroupChat-Bench data (`groupchat_bench.zip`, ~390 MB) is hosted on
-[Google Drive](https://drive.google.com/file/d/1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8/view?usp=sharing).
-Download it in the browser, or from the command line with `gdown`:
+## 2. The GroupChat-Bench Data
+
+### 2.1 What is in the benchmark
+
+GroupChat-Bench is built from the scripts of three sitcoms. Each scene is one group-chat
+**session**; sessions are ordered chronologically and each carries its air date.
+
+| Show (`<show>`) | Sessions | Assistant character |
+|---|---|---|
+| Friends (`friends`) | 788 | Ross |
+| The Big Bang Theory (`bigbang`) | 805 | Sheldon |
+| The Office (`theoffice`) | 2347 | Michael |
+
+- **One question per session.** In session *i* a participant (the *questioner*) asks the
+  assistant character a five-choice question in the middle of the conversation. The agent
+  may use sessions 0 .. *i*-1 plus session *i* up to the question turn; nothing later.
+- **Question types** (ratio 1 : 1 : 2): *TKG 1-hop* and *TKG 2-hop* questions about
+  relations between characters that hold at a past / current / future point in time, and
+  *fan-quiz* questions about events in the show (including unanswerable ones).
+- **Five options.** Option (E) is always "I don't know. (None of the above)". The correct
+  letter is balanced over (A)-(E), so chance accuracy is 20%.
+- **Name settings** (`data_type`): `normal` (original character names), `newname`
+  (characters consistently renamed, so parametric knowledge of the show does not help - the
+  main setting of the paper) and `shuffled` (character names swapped with each other, an
+  adversarial setting).
+- **Trials** (`trial` 0 / 1 / 2): three independently sampled question sets; the paper
+  reports the mean over the three.
+
+### 2.2 Download the Data
+
+Two archives are provided. **Most users only need the processed data.**
+
+| Archive | Size | Contents | Use it to |
+|---|---|---|---|
+| **Processed data** `groupchat_bench_processed.zip` - [download](<PROCESSED_DATA_URL>) | ~155 MB (1.2 GB unzipped) | Everything the experiments read, for all shows / name settings / trials, including the records extracted by the three paper backbones | run every experiment directly |
+| Raw data `groupchat_bench.zip` - [download](https://drive.google.com/file/d/1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8/view?usp=sharing) | ~390 MB (4.5 GB unzipped) | The original question pools and oracle annotations (pickles) | regenerate the processed data yourself ([Section 3](#3-building-the-inputs-from-the-raw-data)) |
 
 ```bash
-pip install gdown
+pip install gdown   # optional: command-line download from Google Drive
+# processed data -> creates ./data/
+gdown <PROCESSED_DATA_FILE_ID> -O groupchat_bench_processed.zip
+unzip groupchat_bench_processed.zip
+# raw data (only for Section 3) -> creates ./groupchat_bench/
 gdown 1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8 -O groupchat_bench.zip
 unzip groupchat_bench.zip
 ```
 
-All example configs read from `./data/<show>` (`dataset_root: ./data/friends`). After
-unzipping, place (or symlink) the three show folders under `./data/` so that the
-following paths exist:
+All example configs read `./data/<show>` (`data.dataset_root: ./data/friends`). To keep the
+data elsewhere, change `dataset_root` in the config. Sanity check:
+`ls data/friends/date.json data/friends/newname/precomputed/per-trial/t0/qa.json`.
+
+### 2.3 Processed data layout
 
 ```
 data/
-└── <show>/                            # friends / bigbang / theoffice (same layout)
-    ├── date.json                      # per-session timestamps
-    └── {newname,normal,shuffled}/     # character-name setting (data_type)
-        ├── entire_session.json        # chronological sessions
-        └── precomputed/per-trial/t{0,1,2}/
-            ├── qa.json                # questions for this trial
-            ├── partial_dialogues.json # partial sessions (optional)
-            └── per-llm/<model>/b06000/    # GroupChat-Mem only: precomputed
-                ├── route.json             #   relational records R
-                └── openie/partial_session_records_raw.json
+├── gt_triples/<show>.json                         # human-annotated records of every session
+└── <show>/                                         # friends / bigbang / theoffice
+    ├── date.json                                   # air date of each session
+    └── <data_type>/                                # normal / newname / shuffled
+        ├── entire_session.json                     # full dialogue of each session
+        ├── precomputed/
+        │   ├── common/openie/<llm>/b06000/
+        │   │   └── entire_session_records_raw.json # records of each full session
+        │   └── per-trial/t<N>/                     # N = 0, 1, 2
+        │       ├── qa.json                         # the question of each session
+        │       ├── partial_dialogues.json          # each session cut at its question turn
+        │       ├── qa_provenance.json              # (normal only) source of each question
+        │       └── per-llm/<llm>/b06000/
+        │           ├── openie/partial_session_records_raw.json   # records of each partial session
+        │           ├── query_node_raw_nq3.json                   # query nodes of each question
+        │           └── query_node_raw_nq3_attempted.json
+        └── oracle/                                 # newname only
+            ├── trial<N>.oracle.dialogue.json       # answer sessions of each question
+            └── <llm>/trial<N>.oracle_raw.json      # records of those answer sessions
 ```
 
-Sanity check: `ls data/friends/date.json data/friends/newname/entire_session.json`.
-To store the data elsewhere, change `dataset_root` in the config instead.
+`<llm>` is `qwen3.5-35b-a3b-on`, `gemma-4-26b-on` or `gpt-oss-20b` (the paper backbones,
+records extracted by the model itself) or `gt` (human-annotated records, used by the
+Oracle). `b06000` stands for the 6000-token reasoning budget used while extracting.
+All lists are indexed by session (index *i* = session *i*).
 
-- **Baselines** (Direct QA, Simple RAG, HippoRAG 2, Mem0, A-MEM, Oracle) use only the
-  sessions, timestamps and questions (`per_llm_precomputed: false`); they build their own
-  memories at run time.
-- **GroupChat-Mem** (`per_llm_precomputed: true`) loads the relational records $\mathcal{R}$ that
-  were extracted offline with `prompts/record_openie_extraction.txt`, from
-  `per-llm/<model>/b06000/` (`<model>` = the config's `llms[].name`, `b06000` =
-  `memory.cache_budget: 6000`). A missing cache raises `FileNotFoundError` with the
-  expected path.
-- Embedding files (`*_embedding.npy`) are optional caches; if absent, embeddings are
-  computed with the OpenAI API at run time.
+| File | Format |
+|---|---|
+| `date.json` | `["September 22, 1994", ...]` |
+| `entire_session.json`, `partial_dialogues.json` | `["Monica: There's nothing to tell! ...", ...]` |
+| `qa.json` | column lists: `question`, `option` (5 strings), `true_answer`, `true_answer_choice` (`"(A)"`..`"(E)"`), `questioner`, `tkg_hop` (`1`, `2`, or `-1` for fan-quiz) |
+| `*_records_raw.json` | `[[{"head", "relation", "tail", "start_date"}, ...], ...]` - one list of records per session; `start_date` is the session's date |
+| `query_node_raw_nq3.json` | `{"<session index>": ["node", ...]}` - the top-3 record-graph nodes the question is about |
+| `oracle/*.json` | one entry per question with its `timestamp` (dates of the answer sessions) and the evidence: `oracle_dialogues_time_ordered` / `_by_bm25` / `_by_cosine` / `_by_alternating`, or `oracle_records_by_cosine` |
+| `gt_triples/<show>.json` | `[{"date": ..., "triples": [[head, relation, tail], ...]}, ...]` (lower-case, original names) |
 
-### 3. Environment Variables
+What each method reads:
+
+- **Baselines** (Direct QA, Simple RAG, HippoRAG 2, Mem0, A-MEM) read only `date.json`,
+  the dialogues and `qa.json` (`per_llm_precomputed: false`) and build their own memories
+  at run time.
+- **Oracle** additionally reads `oracle/` (dialogues, and `gt` records for the record
+  variants).
+- **GroupChat-Mem** (`per_llm_precomputed: true`) also reads the records and query nodes of
+  the backbone named in `llms[].name`. They ship for the three paper backbones. For any
+  other backbone (e.g. the `qwen122b`, `gptoss120b`, `luna`, `gemini` example configs),
+  build them first with steps 2-3 of [Section 3](#3-building-the-inputs-from-the-raw-data),
+  or reuse a shipped backbone's records with `memory.cache_llm_name` (see the `terra_qwencache`
+  config). A missing file raises `FileNotFoundError` with the expected path.
+- A few `query_node_raw_nq3.json` files of the `normal` / `shuffled` settings do not cover
+  every question; the missing questions are identified live during the run with the same
+  prompts (`prompts/query_node_id*.txt`). Embeddings are not shipped: they are computed with the OpenAI API on the
+  first run and cached under `data/` (`*_embedding_cache.pickle`).
+
+### 2.4 Raw data layout
+
+```
+groupchat_bench/
+├── <show>_groupchat_bench.pickle   # sessions: transcript ("script") + question pools
+├── <show>_oracle_tkg.pickle        # answer-session dates of every TKG question
+└── <show>_oracle_fan.pickle        # answer-session dates of every fan-quiz question
+```
+
+`<show>_groupchat_bench.pickle` is `{episode: {scene: session}}`; each session holds
+`script` (the transcript), `hard_q` (TKG questions by time type, e.g. `past`, `cur_fu`)
+and `easy_q` (fan-quiz questions). Every question has `questions` (the wording for each
+possible questioner), `options` and `answer`. The human-annotated records are in the
+processed archive (`data/gt_triples/`).
+
+* * *
+
+## 3. Building the Inputs from the Raw Data
+
+The `preprocess/` scripts turn the raw pickles into exactly the processed layout above.
+You only need them to rebuild the data, to change the sampling, or to prepare records for a
+new backbone. All scripts are resumable (re-running the same command continues).
+
+| Step | Script | Needs | Produces |
+|---|---|---|---|
+| 1 | `step1_build_text.py` | raw pickles | `date.json`, dialogues, `qa.json`, `partial_dialogues.json`, `qa_provenance.json` |
+| 4 | `step4_convert_gt_records.py` | `gt_triples/` | `gt` records for the Oracle |
+| 2 | `step2_extract_records.py` | step 1, an LLM endpoint | the backbone's records (entire + partial sessions) |
+| 3 | `step3_build_query_nodes.py` | step 2, an LLM endpoint | the backbone's query nodes |
+| 5 | `step5_build_oracle.py` | steps 1, 4 (and 2) | `oracle/` bundles |
+
+Run them from the repository root, in the order shown (step 4 is independent of steps 2-3):
+
+```bash
+RAW=./groupchat_bench      # unzipped raw archive
+DATA=./data                # output root (the configs' dataset_root parent)
+
+# Step 1 - sample one question per session (seeded by the trial, deterministic), cut each
+#          session at the question turn, write all three name settings.
+python preprocess/step1_build_text.py --raw-dir $RAW --data-root $DATA
+
+# Step 4 - human-annotated records -> gt record files (format + renaming only).
+python preprocess/step4_convert_gt_records.py --gt-dir $DATA/gt_triples --data-root $DATA
+
+# Step 2 - LLM record extraction (prompts/record_openie_extraction.txt) from each setting's
+#          own dialogues; every record gets its session's date. Needs an OpenAI-compatible
+#          endpoint serving the model under --llm (see the vLLM command in Quick Start).
+python preprocess/step2_extract_records.py --data-root $DATA \
+  --llm qwen3.5-35b-a3b-on --base-url http://localhost:8000/v1 --workers 32
+
+# Step 3 - query-node identification with the same code GroupChat-Mem runs at query time
+#          (prompts/query_node_id*.txt); the endpoint/sampling come from a GroupChat-Mem config.
+PYTHONPATH=src python preprocess/step3_build_query_nodes.py --data-root $DATA \
+  --config configs/groupchat_mem/groupchat_mem.qwen.friends.newname.t0.yaml \
+  --llm qwen3.5-35b-a3b-on --base-url http://localhost:8000/v1
+
+# Step 5 - oracle bundles (answer sessions + their records) for the Oracle baselines.
+python preprocess/step5_build_oracle.py --raw-dir $RAW --data-root $DATA \
+  --data-types newname --record-llms gt
+```
+
+Notes:
+
+- Every script accepts `--shows`, `--data-types` and `--trials` (comma lists) to restrict
+  the work, e.g. `--shows friends --data-types newname --trials 0`.
+- Step 2 sampling presets (`--preset auto` picks one from the model name): thinking models
+  (Qwen3.5 / Gemma-4) use temperature 0.6, top_p 0.95 and a 6000-token reasoning budget;
+  GPT-OSS uses `reasoning_effort: medium`. The vLLM server of a thinking model needs
+  `--reasoning-parser` and `--reasoning-config` for the budget to apply.
+- Step 3 reuses the `llms` entry of the given config with the extraction-time reasoning
+  setting (budget 6000 / `reasoning_effort: medium`). `--base-url` overrides the config's
+  endpoint. A question that fails or times out is not written and is retried on the next run.
+- Step 5 computes the cosine orderings with OpenAI embeddings (`OPENAI_API_KEY`); pass
+  `--no-embedding` to skip them (the paper's Oracle uses the time-ordered dialogues, which
+  do not need embeddings). Add backbone names to `--record-llms` to also bundle their
+  records, e.g. `--record-llms gt,qwen3.5-35b-a3b-on`.
+- LLM sampling is stochastic, so steps 2-3 reproduce the procedure, not byte-identical
+  files; the shipped processed data are the files used in the paper.
+
+* * *
+
+## 4. Environment Variables
 
 - `OPENAI_API_KEY` - used for the OpenAI embeddings (`text-embedding-3-small`) in retrieval,
   and for OpenAI API backbones (e.g. GPT-5.x reasoning models).
@@ -121,7 +300,7 @@ To store the data elsewhere, change `dataset_root` in the config instead.
 - A QA backbone. Any of:
   - a local **vLLM** endpoint (open models) via an OpenAI-compatible API - set the
     endpoint's host/port in the config (`llms[].host` / `llms[].port`) or via the
-    `VLLM_HOST` / `VLLM_PORT` placeholders in the example configs; or
+    `<VLLM_HOST>` / `<VLLM_PORT>` placeholders in the example configs; or
   - an **API model** (`provider: openai` with a `base_url`) - e.g. GPT-5.x
     (`configs/groupchat_mem/groupchat_mem.luna.friends.newname.t0.yaml`) or Gemini
     (`groupchat_mem.gemini.friends.newname.t0.yaml`). Reasoning models set `top_p: null`
@@ -153,7 +332,7 @@ the source cache). This lets a frontier model answer over an open model's precom
 cache without rebuilding it - see
 `configs/groupchat_mem/groupchat_mem.terra_qwencache.friends.newname.t0.yaml`.
 
-### 4. Run
+## 5. Run the Experiments
 
 Every example config uses Friends / New Names / trial 0. To run another setting, edit
 `data.dataset_root` (`./data/{friends,bigbang,theoffice}`), `data.data_type`
@@ -178,10 +357,11 @@ PYTHONPATH=src python src/run/run_groupchat_mem.py \
 ```
 
 Larger open backbones have ready example configs too: `groupchat_mem.qwen122b.*`
-(Qwen3.5-122B-A10B) and `groupchat_mem.gptoss120b.*` (GPT-OSS-120B). GPT-OSS is a
-reasoning-effort model (no `thinking_token_budget`), so its config uses `top_p: 1.0`
-and `extra_body.chat_template_kwargs.reasoning_effort: high`; swap `--llms` to match
-the config's model name (`qwen3.5-122b-a10b` / `gpt-oss-120b`).
+(Qwen3.5-122B-A10B) and `groupchat_mem.gptoss120b.*` (GPT-OSS-120B). Their records are not
+shipped, so build them first (steps 2-3 of Section 3). GPT-OSS is a reasoning-effort model
+(no `thinking_token_budget`), so its config uses `top_p: 1.0` and
+`extra_body.chat_template_kwargs.reasoning_effort: high`; swap `--llms` to match the
+config's model name (`qwen3.5-122b-a10b` / `gpt-oss-120b`).
 
 **A baseline (e.g. HippoRAG 2):**
 
@@ -195,7 +375,7 @@ PYTHONPATH=src python src/run/run_baseline.py \
 Baselines first build (commit) their memory session by session, saving a snapshot to
 `run.snapshot_dir`, then answer the questions. Always pass a distinct `--out` per run:
 the default (`./result/simulate_result.json`) is shared, so separate runs would overwrite
-each other.
+each other. The Oracle configs (`configs/baselines/oracle*.yaml`) run the same way.
 
 **Outputs.** GroupChat-Mem writes a JSON per grid point to `run.result_dir`
 (e.g. `result/groupchat_mem/friends/t0/`); a baseline writes `<--out>.<llm>.json`. Each
@@ -217,6 +397,7 @@ same command resumes an interrupted run.
 │   ├── groupchat_mem/    # the proposed method
 │   └── baselines/        # a_mem, mem0, hipporag2, oracle, simple_rag / direct_qa
 ├── prompts/              # prompt templates (OpenIE, QA, traversal, baselines)
+├── preprocess/           # raw data -> experiment inputs (steps 1-5, Section 3)
 └── src/
     ├── groupchat_qa/
     │   ├── client/       # LLM clients (OpenAI-compatible / vLLM), load-aware routing
@@ -228,16 +409,6 @@ same command resumes an interrupted run.
         ├── run_groupchat_mem.py   # entry: proposed method (grid / resume)
         └── run_baseline.py        # entry: baselines + oracle (commit + QA)
 ```
-
-### Data layout
-
-Configs point at a `dataset_root` per show - `friends`, `bigbang`, `theoffice`. Each show
-provides the chronological sessions and per-session candidate question sets. The `data_type`
-selects a character-name setting - `newname` (New Names, the default), `normal` (Original
-Names), or `shuffled` (the adversarial Swapped Names) - and `trial` selects one of the
-three sampled question sets used for the reported mean/standard deviation.
-
-See [Download the Data](#2-download-the-data) for the download and the on-disk tree.
 
 ### GroupChat-Mem hyperparameters
 
