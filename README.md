@@ -68,8 +68,9 @@ cd groupchat_bench
 python -m venv .venv && source .venv/bin/activate        # Python >= 3.10
 pip install -r requirements.txt
 
-# 2. get the ready-to-run data (creates ./data/)
-#    download groupchat_bench_processed.zip from the link in "Download the Data" below
+# 2. get the ready-to-run data (creates ./data/; see "Download the Data" below)
+pip install gdown
+gdown 12qMDnfCd8eZjiGKSU9L0UuoF67Yg8zI1 -O groupchat_bench_processed.zip
 unzip groupchat_bench_processed.zip
 
 # 3. keys + a QA backbone (here: a local vLLM server, run it in a separate terminal)
@@ -135,13 +136,13 @@ Two archives are provided. **Most users only need the processed data.**
 
 | Archive | Size | Contents | Use it to |
 |---|---|---|---|
-| **Processed data** `groupchat_bench_processed.zip` - [download](<PROCESSED_DATA_URL>) | ~155 MB (1.2 GB unzipped) | Everything the experiments read, for all shows / name settings / trials, including the records extracted by the three paper backbones | run every experiment directly |
+| **Processed data** `groupchat_bench_processed.zip` - [download](https://drive.google.com/file/d/12qMDnfCd8eZjiGKSU9L0UuoF67Yg8zI1/view?usp=sharing) | ~155 MB (1.2 GB unzipped) | Everything the experiments read, for all shows / name settings / trials, including the records extracted by the three paper backbones | run every experiment directly |
 | Raw data `groupchat_bench.zip` - [download](https://drive.google.com/file/d/1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8/view?usp=sharing) | ~390 MB (4.5 GB unzipped) | The original question pools and oracle annotations (pickles) | regenerate the processed data yourself ([Section 3](#3-building-the-inputs-from-the-raw-data)) |
 
 ```bash
 pip install gdown   # optional: command-line download from Google Drive
 # processed data -> creates ./data/
-gdown <PROCESSED_DATA_FILE_ID> -O groupchat_bench_processed.zip
+gdown 12qMDnfCd8eZjiGKSU9L0UuoF67Yg8zI1 -O groupchat_bench_processed.zip
 unzip groupchat_bench_processed.zip
 # raw data (only for Section 3) -> creates ./groupchat_bench/
 gdown 1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8 -O groupchat_bench.zip
