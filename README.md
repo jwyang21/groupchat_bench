@@ -12,7 +12,6 @@ and retrieves from both to answer questions over long group-chat histories.
 
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 
-
 * * *
 
 ## Overview
@@ -63,11 +62,57 @@ timepoint so information from future sessions never leaks into a past question.
 ### 1. Installation
 
 ```bash
+git clone https://github.com/jwyang21/groupchat_bench.git
+cd groupchat_bench
 python -m venv .venv && source .venv/bin/activate   # Python >= 3.10
 pip install -r requirements.txt
 ```
 
-### 2. Environment Variables
+### 2. Download the Data
+
+The GroupChat-Bench data (`groupchat_bench.zip`, ~390 MB) is hosted on
+[Google Drive](https://drive.google.com/file/d/1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8/view?usp=sharing).
+Download it in the browser, or from the command line with `gdown`:
+
+```bash
+pip install gdown
+gdown 1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8 -O groupchat_bench.zip
+unzip groupchat_bench.zip
+```
+
+All example configs read from `./data/<show>` (`dataset_root: ./data/friends`). After
+unzipping, place (or symlink) the three show folders under `./data/` so that the
+following paths exist:
+
+```
+data/
+└── <show>/                            # friends / bigbang / theoffice (same layout)
+    ├── date.json                      # per-session timestamps
+    └── {newname,normal,shuffled}/     # character-name setting (data_type)
+        ├── entire_session.json        # chronological sessions
+        └── precomputed/per-trial/t{0,1,2}/
+            ├── qa.json                # questions for this trial
+            ├── partial_dialogues.json # partial sessions (optional)
+            └── per-llm/<model>/b06000/    # GroupChat-Mem only: precomputed
+                ├── route.json             #   relational records R
+                └── openie/partial_session_records_raw.json
+```
+
+Sanity check: `ls data/friends/date.json data/friends/newname/entire_session.json`.
+To store the data elsewhere, change `dataset_root` in the config instead.
+
+- **Baselines** (Direct QA, Simple RAG, HippoRAG 2, Mem0, A-MEM, Oracle) use only the
+  sessions, timestamps and questions (`per_llm_precomputed: false`); they build their own
+  memories at run time.
+- **GroupChat-Mem** (`per_llm_precomputed: true`) loads the relational records $\mathcal{R}$ that
+  were extracted offline with `prompts/record_openie_extraction.txt`, from
+  `per-llm/<model>/b06000/` (`<model>` = the config's `llms[].name`, `b06000` =
+  `memory.cache_budget: 6000`). A missing cache raises `FileNotFoundError` with the
+  expected path.
+- Embedding files (`*_embedding.npy`) are optional caches; if absent, embeddings are
+  computed with the OpenAI API at run time.
+
+### 3. Environment Variables
 
 - `OPENAI_API_KEY` - used for the OpenAI embeddings (`text-embedding-3-small`) in retrieval,
   and for OpenAI API backbones (e.g. GPT-5.x reasoning models).
@@ -108,7 +153,21 @@ the source cache). This lets a frontier model answer over an open model's precom
 cache without rebuilding it - see
 `configs/groupchat_mem/groupchat_mem.terra_qwencache.friends.newname.t0.yaml`.
 
-### 3. Run
+### 4. Run
+
+Every example config uses Friends / New Names / trial 0. To run another setting, edit
+`data.dataset_root` (`./data/{friends,bigbang,theoffice}`), `data.data_type`
+(`newname` / `normal` / `shuffled`) and `data.trial` (`0` / `1` / `2`), and give each run
+its own output path.
+
+For a local vLLM backbone, serve the model under the name used in the config
+(`--served-model-name qwen3.5-35b-a3b-on` for the Qwen examples) and replace the
+`<VLLM_HOST>` / `<VLLM_PORT>` placeholders, e.g.:
+
+```bash
+sed -i 's/<VLLM_HOST>/localhost/; s/<VLLM_PORT>/8000/' \
+  configs/groupchat_mem/groupchat_mem.qwen.friends.newname.t0.yaml
+```
 
 **GroupChat-Mem (proposed method):**
 
@@ -129,8 +188,19 @@ the config's model name (`qwen3.5-122b-a10b` / `gpt-oss-120b`).
 ```bash
 PYTHONPATH=src python src/run/run_baseline.py \
   --config configs/baselines/hipporag2.qwen.friends.newname.t0.yaml \
-  --llms qwen3.5-35b-a3b-on
+  --llms qwen3.5-35b-a3b-on \
+  --out result/baselines/hipporag2.friends.newname.t0
 ```
+
+Baselines first build (commit) their memory session by session, saving a snapshot to
+`run.snapshot_dir`, then answer the questions. Always pass a distinct `--out` per run:
+the default (`./result/simulate_result.json`) is shared, so separate runs would overwrite
+each other.
+
+**Outputs.** GroupChat-Mem writes a JSON per grid point to `run.result_dir`
+(e.g. `result/groupchat_mem/friends/t0/`); a baseline writes `<--out>.<llm>.json`. Each
+file holds a `summary` (`accuracy`, `n_scored`) and per-question `records`. Re-running the
+same command resumes an interrupted run.
 
 * * *
 
@@ -167,7 +237,7 @@ selects a character-name setting - `newname` (New Names, the default), `normal` 
 Names), or `shuffled` (the adversarial Swapped Names) - and `trial` selects one of the
 three sampled question sets used for the reported mean/standard deviation.
 
-The raw GroupChat-Bench data is available in this [link](https://drive.google.com/file/d/1WP-hNpbYM3uL8qkr8I8ouJnW0sfaCwu8/view?usp=sharing).
+See [Download the Data](#2-download-the-data) for the download and the on-disk tree.
 
 ### GroupChat-Mem hyperparameters
 
