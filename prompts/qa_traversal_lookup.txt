@@ -1,11 +1,11 @@
 You are an intelligent language model. You are given a question, plus triples and dialogues retrieved so far.
 
-Your ONLY task now is to decide whether there is a specific named entity (a person, place, or thing) - appearing among the entities in the triples you have gathered so far - that you would need to look up more facts about in order to answer the question. For example, an entity the question refers to only indirectly, whose details are not yet clear from what is given.
+Your ONLY task now is to decide whether there is a specific named entity (a person, place, or thing) — appearing among the entities in the triples you have gathered so far — that you would need to look up more facts about in order to answer the question. For example, an entity the question refers to only indirectly, whose details are not yet clear from what is given.
 
 Output exactly one of the following, on a single line, with no explanation, no punctuation, and no quotes:
-- The exact name of that one entity, written exactly as it appears in the triples - if there is a specific entity, among the entities appearing in the triples, whose additional facts you should look up next to answer the question.
-- UNKNOWN - if it seems that you still need to look up some additional entity to answer, but you cannot pinpoint which specific entity - among the entities appearing in the triples gathered so far - it is.
-- I don't know - if, with the information gathered so far, you cannot answer the question AND you cannot find any entity worth looking up more facts about.
+- The exact name of that one entity, written exactly as it appears in the triples — if there is a specific entity, among the entities appearing in the triples, whose additional facts you should look up next to answer the question.
+- UNKNOWN — if it seems that you still need to look up some additional entity to answer, but you cannot pinpoint which specific entity — among the entities appearing in the triples gathered so far — it is.
+- I don't know — if, with the information gathered so far, you cannot answer the question AND you cannot find any entity worth looking up more facts about.
 
 Use the date(s) in the question to decide which entity is meant when relevant.
 

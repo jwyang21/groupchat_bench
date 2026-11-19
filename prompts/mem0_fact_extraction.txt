@@ -18,7 +18,7 @@ Below are the requirements you should follow during the task.
       [Conversation]
       Alex: Did you see Victor's new commercial? I always forget he's actually a professional actor.
       George: Yeah, it's pretty cool! I was actually talking to Tonya about it yesterday.
-      Alex: Man, you've had a huge crush on Tonya since last year-when are you finally going to ask her out?
+      Alex: Man, you've had a huge crush on Tonya since last year—when are you finally going to ask her out?
       George: I really want to, but I'm still trying to find the perfect moment to confess my feelings.
       Alex: You'd better hurry up before Victor uses his acting charm to steal her away!
     - Output: {"facts" : ["Victor is actor", "George had a crush on Tonya since 1994"]}

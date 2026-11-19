@@ -11,7 +11,7 @@ combines a structured **relational memory** with a **raw session repository**
 and retrieves from both to answer questions over long group-chat histories.
 
 > **Note:** An earlier version of this work, titled **DialSim**, was presented
-> at the **ICLR 2026 MemAgents Workshop**. **GroupChat-Bench** is an extended
+> at the [**ICLR 2026 MemAgents Workshop**](https://iclr.cc/virtual/2026/10021244). **GroupChat-Bench** is an extended
 > and updated version of that work.
 
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
@@ -23,21 +23,24 @@ and retrieves from both to answer questions over long group-chat histories.
 Group chats pose challenges that most dialogue benchmarks do not capture: **multi-party
 grounding** (who an utterance concerns and how it fits the relationships among
 participants), **temporal persistence** (personal and relational information accumulates,
-changes, and is reinterpreted across sessions), and **unstructured interaction**
+changes, and is reinterpreted across sessions), and **entangled interaction**
 (fragmented utterances, pile-on reactions, and interleaved topics). Agents are evaluated
 as sessions unfold chronologically, answering from only the conversation history available
 when each question is posed.
 
-**GroupChat-Mem** is a dual-view memory built online from the dialogue only:
+**GroupChat-Mem** is a dual-view memory built from the dialogue only:
 
-- **Relational memory $\mathcal{R}$.** At each turn, an LLM performs **Open Information Extraction
+- **Relational memory $\mathcal{R}$.** An LLM performs **Open Information Extraction
   (OpenIE)** over the (partial) session and produces **`[subject, relation, object]`**
-  records (open-schema - no predefined entity types or relation labels). Subjects and
+  records (open-schema - no predefined entity types or relation labels). In this release
+  the extraction is run twice per session: over the partial session up to the question
+  turn (used for that session's question) and over the complete session (used for every
+  later question). Subjects and
   objects become nodes and relations become edges; each record carries its source
   session's timestamp. Records from different sessions are linked through shared nodes,
-  forming a graph-structured relational memory. Re-extraction uses the *complete* partial
-  session and **replaces** the previous extraction, so earlier records are revised as later
-  utterances resolve references.
+  forming a graph-structured relational memory. Each extraction reads the whole (partial)
+  session, and the complete-session extraction **replaces** the partial one, so earlier
+  records are revised as later utterances resolve references.
 - **Raw session repository $\mathcal{S}$.** Each original session is stored verbatim, preserving exact
   wording, local discourse context, and conversational nuances that a compressed
   representation may omit.
@@ -56,8 +59,11 @@ initial answer is insufficient, performs a fine-grained traversal over $\mathcal
    re-answers after each hop, stopping when the answer is supported or at the **maximum hop
    limit** - in which case it returns **"I don't know."**
 
-$\mathcal{R}$ is induced purely from the observed dialogue; retrieval is reconstructed at each query's
-timepoint so information from future sessions never leaks into a past question.
+$\mathcal{R}$ is induced purely from the observed dialogue. The extractions are precomputed for
+speed, but the causal condition is the same as running online: a question in session *i* sees
+only the complete-session records of sessions before *i* and the partial-session records of
+session *i* up to the question turn, so information from later sessions never leaks into a
+past question.
 
 * * *
 
@@ -123,8 +129,11 @@ GroupChat-Bench is built from the scripts of three sitcoms. Each scene is one gr
   assistant character a five-choice question in the middle of the conversation. The agent
   may use sessions 0 .. *i*-1 plus session *i* up to the question turn; nothing later.
 - **Question types** (ratio 1 : 1 : 2): *TKG 1-hop* and *TKG 2-hop* questions about
-  relations between characters that hold at a past / current / future point in time, and
-  *fan-quiz* questions about events in the show (including unanswerable ones).
+  relations between characters, and *fan-quiz* questions about events in the show. A TKG
+  question is asked either after the relation's date (past) or on that date (current). If
+  no prior evidence exists at the question time (e.g., the relation only appears in a
+  later session), the gold answer is (E) "I don't know." The raw time-type labels
+  (`past`, `cur`, `fu`, ...) mark these cases.
 - **Five options.** Option (E) is always "I don't know. (None of the above)". The correct
   letter is balanced over (A)-(E), so chance accuracy is 20%.
 - **Name settings** (`data_type`): `normal` (original character names), `newname`
@@ -133,6 +142,17 @@ GroupChat-Bench is built from the scripts of three sitcoms. Each scene is one gr
   adversarial setting).
 - **Trials** (`trial` 0 / 1 / 2): three independently sampled question sets; the paper
   reports the mean over the three.
+
+Config values and the names used in the paper:
+
+| Config key | Config value | Paper name |
+|---|---|---|
+| `data_type` | `normal` | Original Names |
+| `data_type` | `newname` | New Names |
+| `data_type` | `shuffled` | Swapped Names |
+| `question_format` | `multi_structured` | Labeled MCQ |
+| `question_format` | `multi_unstructured` | Naturalized MCQ |
+| `question_format` | `open_ended` | Open-Ended |
 
 ### 2.2 Download the Data
 
@@ -161,7 +181,7 @@ data elsewhere, change `dataset_root` in the config. Sanity check:
 
 ```
 data/
-├── gt_triples/<show>.json                         # human-annotated records of every session
+├── gt_triples/<show>.json                         # LLM-extracted, author-verified records of every session
 └── <show>/                                         # friends / bigbang / theoffice
     ├── date.json                                   # air date of each session
     └── <data_type>/                                # normal / newname / shuffled
@@ -183,7 +203,7 @@ data/
 ```
 
 `<llm>` is `qwen3.5-35b-a3b-on`, `gemma-4-26b-on` or `gpt-oss-20b` (the paper backbones,
-records extracted by the model itself) or `gt` (human-annotated records, used by the
+records extracted by the model itself) or `gt` (LLM-extracted, author-verified records, used by the
 Oracle). `b06000` stands for the 6000-token reasoning budget used while extracting.
 All lists are indexed by session (index *i* = session *i*).
 
@@ -227,7 +247,7 @@ groupchat_bench/
 `<show>_groupchat_bench.pickle` is `{episode: {scene: session}}`; each session holds
 `script` (the transcript), `hard_q` (TKG questions by time type, e.g. `past`, `cur_fu`)
 and `easy_q` (fan-quiz questions). Every question has `questions` (the wording for each
-possible questioner), `options` and `answer`. The human-annotated records are in the
+possible questioner), `options` and `answer`. The LLM-extracted, author-verified records are in the
 processed archive (`data/gt_triples/`).
 
 * * *
@@ -256,7 +276,7 @@ DATA=./data                # output root (the configs' dataset_root parent)
 #          session at the question turn, write all three name settings.
 python preprocess/step1_build_text.py --raw-dir $RAW --data-root $DATA
 
-# Step 4 - human-annotated records -> gt record files (format + renaming only).
+# Step 4 - author-verified gt records -> gt record files (format + renaming only).
 python preprocess/step4_convert_gt_records.py --gt-dir $DATA/gt_triples --data-root $DATA
 
 # Step 2 - LLM record extraction (prompts/record_openie_extraction.txt) from each setting's
@@ -397,6 +417,7 @@ same command resumes an interrupted run.
 .
 ├── README.md
 ├── requirements.txt
+├── setup.cfg
 ├── .gitignore
 ├── configs/
 │   ├── groupchat_mem/    # the proposed method
@@ -433,7 +454,7 @@ same command resumes an interrupted run.
 | **Simple RAG (BM25)** | Sparse lexical session retrieval (`simple_rag`, `retriever: bm25`). |
 | **Simple RAG (OpenAI Embedding)** | Dense semantic session retrieval (`simple_rag`, `retriever: embedding`). |
 | **HippoRAG 2** | OpenIE-based relational fact store + Personalized PageRank retrieval. |
-| **Mem0** | Fact extraction with add/update/delete consolidation, dense retrieval. |
+| **Mem0** | Fact extraction with add/update/delete consolidation; hybrid retrieval (embedding cosine + BM25 scores). |
 | **A-MEM** | Interlinked memory notes with dynamic linking and evolution. |
 | **Oracle** | Upper bound that injects the answer sessions' evidence directly: Sessions (`oracle_sessions_only.*`), Records (`oracle_records_only.*`, ground-truth records), or Sessions + Records (`oracle.*`). |
 
@@ -446,12 +467,15 @@ All prompt templates live in `prompts/`. Each is loaded by name (overridable per
 via the matching `prompt_*` key). QA prompts come in three question-format variants:
 `*.txt` (multi_structured), `*.multi-unstructured.txt`, `*.open-ended.txt`.
 
+All prompts are released **verbatim** as used in the reported experiments, including minor
+wording slips and typos (some inherited from the upstream HippoRAG 2 / Mem0 prompts), so
+that results can be reproduced exactly; editing a prompt changes the model's behavior.
+
 | Prompt(s) | Used by | Purpose |
 |---|---|---|
 | `a_mem_note_construction.txt` | A-MEM | Build a memory note from a session (commit). |
-| `a_mem_evolution.txt` | A-MEM | Evolve neighboring notes when a new note is linked. |
-| `a_mem_link_judge.txt` | A-MEM | Decide whether two notes should be linked. |
-| `a_mem_query_keywords.txt` | A-MEM | Extract query keywords at retrieval time. |
+| `a_mem_evolution.txt` | A-MEM | Link a new note to its neighbors and update their notes (single combined call). |
+| `a_mem_query_keywords.txt` | A-MEM | Turn the question into retrieval keywords before searching notes. |
 | `a_mem_qa.txt` | A-MEM | Final QA (A-MEM's own QA template). |
 | `hipporag2_openie.txt` | HippoRAG 2 | 1-call OpenIE — extracts entities + triples in a single LLM call (the extraction path). |
 | `hipporag2_filter.txt` | HippoRAG 2 | Filter retrieved facts for relevance. |
@@ -463,8 +487,8 @@ via the matching `prompt_*` key). QA prompts come in three question-format varia
 | `qa_sessions.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle, Simple RAG | QA over retrieved **sessions** (dialogue) only. |
 | `qa_dual.{,multi-unstructured,open-ended}.txt` | GroupChat-Mem, Oracle | Dual-view QA over records **and** sessions together. |
 | `qa_no-history.{,multi-unstructured,open-ended}.txt` | Simple RAG (Direct QA) | QA from parametric knowledge only (no retrieved context). |
-| `record_openie_extraction.txt` | GroupChat-Mem | OpenIE extraction that builds the relational memory $\mathcal{R}$ — turns each (partial) session into `[subject, relation, object]` records (run offline; records are then loaded at QA time). |
-| `query_node_id.txt` | GroupChat-Mem | Identify the single query-relevant node in the record graph. |
+| `record_openie_extraction.txt` | GroupChat-Mem | OpenIE extraction that builds the relational memory $\mathcal{R}$ — turns each (partial) session into `[subject, relation, object]` records (precomputed before QA; each question only reads records available at its timepoint). |
+| `query_node_id.txt` | GroupChat-Mem | Identify up to k query-relevant (subject) nodes of the question among the record-graph candidates. |
 | `query_node_id_select.txt` | GroupChat-Mem | Select the top-k query-relevant nodes. |
 | `qa_traversal_lookup.txt` | GroupChat-Mem | During iterative traversal, decide the next entity to look up. |
 
@@ -474,11 +498,17 @@ via the matching `prompt_*` key). QA prompts come in three question-format varia
 
 Main results on the New Names setting (mean over three runs), reported by the paper across
 three backbones (Qwen3.5-35B-A3B, Gemma4-26B-A4B, GPT-OSS 20B); the best memory system per
-column is in **bold**. Each cell shows accuracy (%) as Qwen3.5 / Gemma4 / GPT-OSS.
+column is in **bold** (Oracle rows are reference upper bounds and are not ranked). Each cell
+shows accuracy (%) as Qwen3.5 / Gemma4 / GPT-OSS. The Oracle rows inject the answer
+sessions' dialogue and/or their author-verified records (called Sessions+TKGs, Sessions
+and TKGs in the paper).
 
 | Memory System | Friends | The Big Bang Theory | The Office |
 |---|---|---|---|
 | Direct QA (No History) | 21.4 / 28.7 / 24.6 | 22.5 / 27.3 / 29.6 | 28.2 / 32.3 / 30.3 |
+| Oracle: Sessions + Records (upper bound) | 96.7 / 96.8 / 93.2 | 95.5 / 95.1 / 92.8 | 91.8 / 92.9 / 91.0 |
+| Oracle: Sessions | 77.2 / 79.2 / 77.5 | 85.1 / 82.0 / 85.8 | 77.0 / 78.0 / 78.0 |
+| Oracle: Records | 64.1 / 64.2 / 63.1 | 63.7 / 65.3 / 64.6 | 58.2 / 59.8 / 60.1 |
 | Simple RAG (BM25) | 69.9 / 69.3 / 56.2 | 69.7 / 68.9 / 61.5 | 65.8 / 64.5 / 59.6 |
 | Simple RAG (OpenAI Embedding) | 70.4 / 70.2 / 58.7 | 74.9 / 76.0 / 67.8 | 74.3 / 74.6 / 67.0 |
 | HippoRAG 2 | 73.2 / 73.0 / 60.1 | 78.1 / 77.4 / 68.1 | 75.1 / 75.3 / 68.5 |

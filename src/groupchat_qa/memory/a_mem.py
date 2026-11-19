@@ -222,8 +222,9 @@ class AMemMemory(Memory):
                            a_mem_note_construction.txt).
       prompt_evolution   : combined link+evolution prompt (default
                            a_mem_evolution.txt).
-      prompt_link        : link-only prompt (split mode - default
-                           a_mem_link_judge.txt).
+      prompt_link        : link-only prompt, required only when
+                           split_link_evolution=True (not shipped; the
+                           reported setting uses the combined prompt).
       prompt_qa          : QA prompt filename. Uses the question_format default
                            if unspecified.
       split_link_evolution: bool - if True, split link and evolution into
@@ -231,13 +232,8 @@ class AMemMemory(Memory):
                             separation). Default False = single combined call
                             like the official repo.
       include_linked     : bool - also include the link neighbors of retrieved
-                           notes at retrieve time (default False). The official
-                           A-MEM QA retrieval (search_agentic) is pure top-k
-                           cosine, and link (find_related_memories) is only
-                           used at the note construction/evolution stage;
-                           expanding
-                           to links at QA search deviates from official, so
-                           default False.
+                           notes at retrieve time (default False; the reported
+                           setting retrieves the top-k notes only).
     """
 
     NAME = "a_mem"
@@ -301,8 +297,17 @@ class AMemMemory(Memory):
             cfg.get("prompt_note", "a_mem_note_construction.txt"))
         self._p_evolution = load_prompt(
             cfg.get("prompt_evolution", "a_mem_evolution.txt"))
-        self._p_link = load_prompt(
-            cfg.get("prompt_link", "a_mem_link_judge.txt"))
+        # link-only prompt: loaded only in split mode. The reported setting
+        # (split_link_evolution=False) links and evolves notes with the single
+        # combined prompt (a_mem_evolution.txt), so no link-only prompt ships.
+        self._p_link = None
+        if self.split_link_evolution:
+            _link_name = cfg.get("prompt_link")
+            if not _link_name:
+                raise ValueError(
+                    "split_link_evolution=True requires memory.prompt_link "
+                    "(a link-only prompt file in prompts/).")
+            self._p_link = load_prompt(_link_name)
 
         # QA prompt - default per question_format. A-MEM answers from the
         # retrieved memory notes

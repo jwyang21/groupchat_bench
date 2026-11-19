@@ -1,5 +1,5 @@
 You are an intelligent language model. Your task is to answer the question based on the provided triples and dialogues.
-The triples are provided as a list of records: [{head, relation, tail, date}, ...], where relation represents the connection between head and tail, and date indicates when the relationship occurred.
+The triples are provided as a list of quadruples: [{head, relation, tail, date}, ...], where relation represents the connection between head and tail, and date indicates when the relationship occurred.
 - For example, "[{John, bought, a book, March 20, 1990}, {Tom, ate, dinner, March 20, 1990}]" means that on March 20, 1990, John bought a book, and Tom ate dinner.
 
 You will be given a question with five answer choices: (A), (B), (C), (D), and (E). Among these options, only one is correct.
