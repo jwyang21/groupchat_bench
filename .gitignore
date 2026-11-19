@@ -1,0 +1,47 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# --- Environments ---
+.env
+.venv/
+venv/
+env/
+
+# --- Secrets / credentials ---
+*.key
+*.pem
+
+# --- Experiment artifacts (not tracked; regenerated locally) ---
+data/
+result/
+results/
+log/
+logs/
+cache/
+*.pkl
+*.npy
+*.npz
+*.ckpt
+snapshots/
+baseline_snapshots/
+
+# Embedding / retrieval caches
+*_embedding_cache.pickle
+*embeddings*.npz
+*embeddings*.npy
+
+# --- OS / editor / tooling ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
