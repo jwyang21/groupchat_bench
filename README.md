@@ -11,7 +11,7 @@ combines a structured **relational memory** with a **raw session repository**
 and retrieves from both to answer questions over long group-chat histories.
 
 > **Note:** An earlier version of this work, titled **DialSim**, was presented
-> at the [**ICLR 2026 MemAgents Workshop**](https://iclr.cc/virtual/2026/10021244). **GroupChat-Bench** is an extended
+> at the **ICLR 2026 MemAgents Workshop**. **GroupChat-Bench** is an extended
 > and updated version of that work.
 
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
